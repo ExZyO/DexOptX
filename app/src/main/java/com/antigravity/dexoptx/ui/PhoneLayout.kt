@@ -58,6 +58,9 @@ fun PhoneLayout(
     onModeChange: (String) -> Unit,
     onOptimizeClick: () -> Unit,
     onRequestShizuku: () -> Unit,
+    onCheckUpdate: () -> Unit,
+    onDownloadUpdate: () -> Unit,
+    onDismissUpdate: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -84,38 +87,86 @@ fun PhoneLayout(
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = "AOT Bytecode Compiler",
+                        text = "v1.0.2 • 64-bit ARMv8-A",
                         color = TextMuted,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace
                     )
                 }
 
-                // Shizuku Connection Status Pill
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Check for Updates Button
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0x18FFFFFF))
+                            .border(1.dp, GlassBorder, RoundedCornerShape(10.dp))
+                            .clickable { onCheckUpdate() }
+                            .padding(horizontal = 9.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = if (uiState.isCheckingUpdate) "CHECKING..." else "UPDATE",
+                            color = TextPrimary,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Shizuku Connection Status Pill
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(
+                                if (uiState.isShizukuConnected) NeonEmerald.copy(alpha = 0.15f)
+                                else Color(0x33EF4444)
+                            )
+                            .border(
+                                1.dp,
+                                if (uiState.isShizukuConnected) NeonEmerald.copy(alpha = 0.4f)
+                                else Color(0x66EF4444),
+                                RoundedCornerShape(20.dp)
+                            )
+                            .clickable {
+                                if (!uiState.isShizukuConnected) onRequestShizuku()
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = if (uiState.isShizukuConnected) "SHIZUKU ACTIVE" else "CONNECT SHIZUKU",
+                            color = if (uiState.isShizukuConnected) NeonEmerald else Color(0xFFFCA5A5),
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // Update Banner (if available)
+            if (uiState.availableUpdate != null) {
+                com.antigravity.dexoptx.ui.components.UpdateBanner(
+                    update = uiState.availableUpdate,
+                    onDownloadClick = onDownloadUpdate,
+                    onDismissClick = onDismissUpdate,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                )
+            } else if (uiState.updateStatusMessage != null) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(
-                            if (uiState.isShizukuConnected) NeonEmerald.copy(alpha = 0.15f)
-                            else Color(0x33EF4444)
-                        )
-                        .border(
-                            1.dp,
-                            if (uiState.isShizukuConnected) NeonEmerald.copy(alpha = 0.4f)
-                            else Color(0x66EF4444),
-                            RoundedCornerShape(20.dp)
-                        )
-                        .clickable {
-                            if (!uiState.isShizukuConnected) onRequestShizuku()
-                        }
-                        .padding(horizontal = 12.dp, vertical = 5.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0x2210B981))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = if (uiState.isShizukuConnected) "SHIZUKU ACTIVE" else "CONNECT SHIZUKU",
-                        color = if (uiState.isShizukuConnected) NeonEmerald else Color(0xFFFCA5A5),
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
+                        text = uiState.updateStatusMessage,
+                        color = NeonEmerald,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
             }
@@ -234,7 +285,7 @@ fun PhoneLayout(
 
         // Floating Glass Dock at Bottom
         GlassDock(
-            selectedCount = uiState.allApps.count { it.isSelected },
+            selectedCount = uiState.filteredApps.count { it.isSelected },
             compileMode = uiState.compileMode,
             onModeChange = onModeChange,
             onSelectAll = onSelectAll,

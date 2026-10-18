@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -54,11 +55,14 @@ fun LiveConsoleDialog(
     currentIndex: Int,
     totalCount: Int,
     logs: List<String>,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onCancel: () -> Unit = {}
 ) {
     val progress = if (totalCount > 0) currentIndex.toFloat() / totalCount else 0f
     val animatedProgress by animateFloatAsState(targetValue = progress, label = "progressAnim")
     val listState = rememberLazyListState()
+
+    val isStopped = !isRunning && currentIndex < totalCount && logs.any { it.contains("STOPPED", ignoreCase = true) }
 
     LaunchedEffect(logs.size) {
         if (logs.isNotEmpty()) {
@@ -84,14 +88,26 @@ fun LiveConsoleDialog(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = if (isRunning) Icons.Rounded.Terminal else Icons.Rounded.CheckCircle,
+                            imageVector = when {
+                                isRunning -> Icons.Rounded.Terminal
+                                isStopped -> Icons.Rounded.Close
+                                else -> Icons.Rounded.CheckCircle
+                            },
                             contentDescription = null,
-                            tint = if (isRunning) ElectricViolet else NeonEmerald,
+                            tint = when {
+                                isRunning -> ElectricViolet
+                                isStopped -> Color(0xFFF87171)
+                                else -> NeonEmerald
+                            },
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isRunning) "COMPILING APPS..." else "OPTIMIZATION COMPLETED",
+                            text = when {
+                                isRunning -> "COMPILING APPS..."
+                                isStopped -> "COMPILATION STOPPED"
+                                else -> "OPTIMIZATION COMPLETED"
+                            },
                             color = TextPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
@@ -101,7 +117,7 @@ fun LiveConsoleDialog(
 
                     Text(
                         text = "$currentIndex / $totalCount",
-                        color = ElectricViolet,
+                        color = if (isStopped) Color(0xFFF87171) else ElectricViolet,
                         fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
@@ -117,16 +133,24 @@ fun LiveConsoleDialog(
                         .fillMaxWidth()
                         .height(8.dp)
                         .clip(RoundedCornerShape(4.dp)),
-                    color = ElectricIndigo,
+                    color = if (isStopped) Color(0xFFF87171) else ElectricIndigo,
                     trackColor = Color(0x22FFFFFF)
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Current app being compiled
+                // Current app status
                 Text(
-                    text = if (isRunning) "ACTIVE: $currentApp" else "ALL $totalCount APPS COMPILED",
-                    color = if (isRunning) Color(0xFFE2E8F0) else NeonEmerald,
+                    text = when {
+                        isRunning -> "ACTIVE: $currentApp"
+                        isStopped -> "STOPPED AT $currentIndex OF $totalCount APPS"
+                        else -> "ALL $totalCount APPS COMPILED"
+                    },
+                    color = when {
+                        isRunning -> Color(0xFFE2E8F0)
+                        isStopped -> Color(0xFFF87171)
+                        else -> NeonEmerald
+                    },
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.SemiBold,
@@ -149,7 +173,7 @@ fun LiveConsoleDialog(
                         items(logs) { logLine ->
                             Text(
                                 text = logLine,
-                                color = if (logLine.startsWith("ERR") || logLine.startsWith("EXCEPTION")) Color(0xFFF87171) else TextMuted,
+                                color = if (logLine.startsWith("ERR") || logLine.startsWith("EXCEPTION") || logLine.contains("[STOPPED]")) Color(0xFFF87171) else TextMuted,
                                 fontSize = 10.sp,
                                 fontFamily = FontFamily.Monospace,
                                 lineHeight = 14.sp
@@ -160,26 +184,57 @@ fun LiveConsoleDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Dismiss Button (Active once finished)
-                Button(
-                    onClick = onDismiss,
-                    enabled = !isRunning,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ElectricIndigo,
-                        disabledContainerColor = Color(0x18FFFFFF)
-                    )
-                ) {
-                    Text(
-                        text = if (isRunning) "PROCESSING IN BACKGROUND..." else "DONE",
-                        color = if (!isRunning) Color.White else TextMuted,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
+                // Action Button: STOP COMPILATION when running, DONE when idle/completed
+                if (isRunning) {
+                    Button(
+                        onClick = onCancel,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFDC2626),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "STOP COMPILATION",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ElectricIndigo,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "DONE",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 }
             }
         }

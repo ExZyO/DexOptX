@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 enum class AppFilter(val label: String) {
@@ -33,13 +34,17 @@ data class MainUiState(
     val compilingIndex: Int = 0,
     val compilingTotal: Int = 0,
     val consoleLogs: List<String> = emptyList(),
-    val showConsoleDialog: Boolean = false
+    val showConsoleDialog: Boolean = false,
+    val availableUpdate: com.antigravity.dexoptx.updater.UpdateInfo? = null,
+    val isCheckingUpdate: Boolean = false,
+    val updateStatusMessage: String? = null
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = AppRepository(application)
     val shizukuController = ShizukuController(application)
+    val updateManager = com.antigravity.dexoptx.updater.UpdateManager(application)
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -47,6 +52,89 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         refreshShizukuStatus()
         loadInstalledApps()
+        checkForUpdates(isManual = false)
+    }
+
+    private var updatePollJob: kotlinx.coroutines.Job? = null
+
+    fun checkForUpdates(isManual: Boolean = false) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCheckingUpdate = true, updateStatusMessage = null) }
+            val result = updateManager.checkForUpdates()
+            result.onSuccess { update ->
+                if (update.isNewer) {
+                    _uiState.update {
+                        it.copy(
+                            isCheckingUpdate = false,
+                            availableUpdate = update,
+                            updateStatusMessage = if (update.isBuilding) {
+                                "Compiling on GitHub: ${update.latestVersion}"
+                            } else {
+                                "Update ready: ${update.latestVersion}"
+                            }
+                        )
+                    }
+                    if (update.isBuilding) {
+                        startUpdatePolling()
+                    } else {
+                        stopUpdatePolling()
+                    }
+                } else {
+                    stopUpdatePolling()
+                    _uiState.update {
+                        it.copy(
+                            isCheckingUpdate = false,
+                            availableUpdate = null,
+                            updateStatusMessage = if (isManual) "You are on the latest version (${update.currentVersion})" else null
+                        )
+                    }
+                }
+            }.onFailure { err ->
+                _uiState.update {
+                    it.copy(
+                        isCheckingUpdate = false,
+                        updateStatusMessage = if (isManual) "Update check failed: ${err.localizedMessage}" else null
+                    )
+                }
+            }
+        }
+    }
+
+    private fun startUpdatePolling() {
+        updatePollJob?.cancel()
+        updatePollJob = viewModelScope.launch {
+            while (isActive) {
+                kotlinx.coroutines.delay(15000)
+                updateManager.checkForUpdates().onSuccess { update ->
+                    if (update.isNewer) {
+                        _uiState.update { it.copy(availableUpdate = update) }
+                        if (!update.isBuilding) {
+                            _uiState.update { it.copy(updateStatusMessage = "Update ready: ${update.latestVersion}") }
+                            return@launch
+                        }
+                    } else {
+                        _uiState.update { it.copy(availableUpdate = null) }
+                        return@launch
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopUpdatePolling() {
+        updatePollJob?.cancel()
+        updatePollJob = null
+    }
+
+    fun dismissUpdateBanner() {
+        stopUpdatePolling()
+        _uiState.update { it.copy(availableUpdate = null, updateStatusMessage = null) }
+    }
+
+    fun performDownloadUpdate() {
+        _uiState.value.availableUpdate?.let {
+            updateManager.openDownloadUrl(it.apkUrl)
+        }
     }
 
     fun refreshShizukuStatus() {
@@ -109,7 +197,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             val visiblePackageNames = state.filteredApps.map { it.packageName }.toSet()
             val updatedAll = state.allApps.map {
-                if (it.packageName in visiblePackageNames) it.copy(isSelected = true) else it
+                it.copy(isSelected = it.packageName in visiblePackageNames)
             }
             state.copy(
                 allApps = updatedAll,
@@ -136,8 +224,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(showConsoleDialog = false) }
     }
 
+    private var compilationJob: kotlinx.coroutines.Job? = null
+
+    fun cancelOptimization() {
+        compilationJob?.cancel()
+        compilationJob = null
+        _uiState.update {
+            it.copy(
+                isCompiling = false,
+                consoleLogs = it.consoleLogs + "[STOPPED] Compilation cancelled by user."
+            )
+        }
+    }
+
     fun startOptimization() {
-        val selected = _uiState.value.allApps.filter { it.isSelected }
+        // Strictly compile only the selected apps within the active filter
+        val selected = _uiState.value.filteredApps.filter { it.isSelected }
         if (selected.isEmpty()) return
 
         val mode = _uiState.value.compileMode
@@ -151,8 +253,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        viewModelScope.launch {
-            selected.forEachIndexed { index, app ->
+        compilationJob?.cancel()
+        compilationJob = viewModelScope.launch {
+            for ((index, app) in selected.withIndex()) {
+                if (!isActive) break
+
                 _uiState.update {
                     it.copy(
                         currentCompilingApp = app.appName,
@@ -164,21 +269,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 shizukuController.executeCommand(
                     arrayOf("cmd", "package", "compile", "-m", mode, app.packageName)
                 ).collect { line ->
+                    if (!this@launch.isActive) return@collect
                     _uiState.update { it.copy(consoleLogs = it.consoleLogs + line) }
                 }
             }
 
-            // Trigger system-wide background dexopt pass to sweep containers
-            _uiState.update { it.copy(consoleLogs = it.consoleLogs + "Running system maintenance sweep (cmd package bg-dexopt-job)...") }
-            shizukuController.executeCommand(arrayOf("cmd", "package", "bg-dexopt-job")).collect { line ->
-                _uiState.update { it.copy(consoleLogs = it.consoleLogs + line) }
-            }
+            if (isActive) {
+                // Trigger system-wide background dexopt pass to sweep containers
+                _uiState.update { it.copy(consoleLogs = it.consoleLogs + "Running system maintenance sweep (cmd package bg-dexopt-job)...") }
+                shizukuController.executeCommand(arrayOf("cmd", "package", "bg-dexopt-job")).collect { line ->
+                    if (!this@launch.isActive) return@collect
+                    _uiState.update { it.copy(consoleLogs = it.consoleLogs + line) }
+                }
 
-            _uiState.update {
-                it.copy(
-                    isCompiling = false,
-                    consoleLogs = it.consoleLogs + "Optimization pass completed successfully!"
-                )
+                _uiState.update {
+                    it.copy(
+                        isCompiling = false,
+                        consoleLogs = it.consoleLogs + "Optimization pass completed successfully!"
+                    )
+                }
             }
         }
     }

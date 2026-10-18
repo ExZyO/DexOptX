@@ -57,6 +57,7 @@ import com.antigravity.dexoptx.theme.TextMuted
 import com.antigravity.dexoptx.theme.TextPrimary
 import com.antigravity.dexoptx.theme.TvFocusHighlight
 import com.antigravity.dexoptx.ui.components.AppCard
+import com.antigravity.dexoptx.ui.components.UpdateBanner
 
 @Composable
 fun TvLayout(
@@ -69,9 +70,12 @@ fun TvLayout(
     onModeChange: (String) -> Unit,
     onOptimizeClick: () -> Unit,
     onRequestShizuku: () -> Unit,
+    onCheckUpdate: () -> Unit = {},
+    onDownloadUpdate: () -> Unit = {},
+    onDismissUpdate: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val selectedCount = uiState.allApps.count { it.isSelected }
+    val selectedCount = uiState.filteredApps.count { it.isSelected }
 
     Row(
         modifier = modifier
@@ -102,13 +106,40 @@ fun TvLayout(
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = "Nvidia Shield Pro Edition",
+                        text = "Nvidia Shield Pro • v1.0.2",
                         color = TextMuted,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // TV Check for Updates Button
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0x18FFFFFF))
+                            .clickable { onCheckUpdate() }
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Bolt,
+                            contentDescription = "Check for updates",
+                            tint = if (uiState.isCheckingUpdate) ElectricViolet else TextMuted,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (uiState.isCheckingUpdate) "CHECKING..." else "CHECK UPDATE",
+                            color = TextPrimary,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     // Shizuku Status
                     Box(
@@ -344,6 +375,18 @@ fun TvLayout(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Update Banner (if an update is ready or compiling on GitHub Actions)
+            if (uiState.availableUpdate != null) {
+                UpdateBanner(
+                    update = uiState.availableUpdate,
+                    onDownloadClick = onDownloadUpdate,
+                    onDismissClick = onDismissUpdate,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                )
+            }
 
             // 2-Column Grid of D-Pad Focusable Cards (Full names, NO overlap)
             LazyVerticalGrid(

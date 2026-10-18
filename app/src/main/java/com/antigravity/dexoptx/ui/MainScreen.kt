@@ -41,7 +41,10 @@ fun MainScreen(
                 onDeselectAll = viewModel::onDeselectAll,
                 onModeChange = viewModel::onCompileModeChange,
                 onOptimizeClick = viewModel::startOptimization,
-                onRequestShizuku = viewModel::requestShizukuPermission
+                onRequestShizuku = viewModel::requestShizukuPermission,
+                onCheckUpdate = { viewModel.checkForUpdates(isManual = true) },
+                onDownloadUpdate = viewModel::performDownloadUpdate,
+                onDismissUpdate = viewModel::dismissUpdateBanner
             )
         } else {
             PhoneLayout(
@@ -53,7 +56,10 @@ fun MainScreen(
                 onDeselectAll = viewModel::onDeselectAll,
                 onModeChange = viewModel::onCompileModeChange,
                 onOptimizeClick = viewModel::startOptimization,
-                onRequestShizuku = viewModel::requestShizukuPermission
+                onRequestShizuku = viewModel::requestShizukuPermission,
+                onCheckUpdate = { viewModel.checkForUpdates(isManual = true) },
+                onDownloadUpdate = viewModel::performDownloadUpdate,
+                onDismissUpdate = viewModel::dismissUpdateBanner
             )
         }
 
@@ -65,7 +71,8 @@ fun MainScreen(
                 currentIndex = uiState.compilingIndex,
                 totalCount = uiState.compilingTotal,
                 logs = uiState.consoleLogs,
-                onDismiss = viewModel::closeConsoleDialog
+                onDismiss = viewModel::closeConsoleDialog,
+                onCancel = viewModel::cancelOptimization
             )
         }
     }
