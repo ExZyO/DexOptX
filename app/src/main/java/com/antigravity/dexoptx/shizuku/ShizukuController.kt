@@ -91,18 +91,38 @@ class ShizukuController(private val context: Context) {
         }
     }
 
+    fun isRootAvailable(): Boolean {
+        return try {
+            val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
+            val reader = BufferedReader(InputStreamReader(p.inputStream))
+            val line = reader.readLine()
+            p.waitFor() == 0 && (line?.contains("uid=0") == true)
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    fun isExecutionReady(): Boolean = isPermissionGranted() || isRootAvailable()
+
     private fun spawnProcess(cmd: Array<String>): Process {
+        if (isShizukuAvailable() && isPermissionGranted() && newProcessMethod != null) {
+            return newProcessMethod!!.invoke(null, cmd, null, null) as Process
+        }
+        if (isRootAvailable()) {
+            val cmdStr = cmd.joinToString(" ")
+            return Runtime.getRuntime().exec(arrayOf("su", "-c", cmdStr))
+        }
         val method = newProcessMethod
-            ?: throw IllegalStateException("Shizuku newProcess method unavailable")
+            ?: throw IllegalStateException("Neither Shizuku nor Root is connected")
         return method.invoke(null, cmd, null, null) as Process
     }
 
     /**
-     * Executes shell command via Shizuku binder and emits log lines in real-time.
+     * Executes shell command via Shizuku binder or Root and emits log lines in real-time.
      */
     fun executeCommand(commandArgs: Array<String>): Flow<String> = flow {
-        if (!isPermissionGranted()) {
-            emit("ERROR: Shizuku permission not granted.")
+        if (!isExecutionReady()) {
+            emit("ERROR: Shizuku permission not granted and Root not available.")
             return@flow
         }
 

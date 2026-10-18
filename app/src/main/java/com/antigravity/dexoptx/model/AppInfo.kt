@@ -5,8 +5,12 @@ import android.graphics.drawable.Drawable
 enum class CompileStatus(val label: String) {
     SPEED("COMPILED: SPEED"),
     SPEED_PROFILE("COMPILED: PROFILE"),
+    EVERYTHING("COMPILED: EVERYTHING"),
     UNCOMPILED("UNCOMPILED"),
-    UNKNOWN("STATUS: UNKNOWN")
+    UNKNOWN("STATUS: UNKNOWN");
+
+    val isCompiled: Boolean
+        get() = this == SPEED || this == SPEED_PROFILE || this == EVERYTHING
 }
 
 data class AppInfo(

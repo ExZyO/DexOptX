@@ -68,16 +68,23 @@ fun AppCard(
     val scale by animateFloatAsState(targetValue = if (isFocused) 1.02f else 1.0f, label = "cardScale")
     val borderColor by animateColorAsState(
         targetValue = when {
+            isFocused && app.isSelected -> Color(0xFFA5B4FC) // Bright glowing focus on selected
             isFocused -> TvFocusHighlight
-            app.isSelected -> ElectricIndigo.copy(alpha = 0.6f)
+            app.isSelected -> Color(0xFF818CF8) // Bright neon border for selected
             else -> GlassBorder
         },
         label = "borderColor"
     )
+    val borderWidth = when {
+        isFocused -> 3.dp
+        app.isSelected -> 2.dp
+        else -> 1.dp
+    }
     val backgroundColor by animateColorAsState(
         targetValue = when {
+            isFocused && app.isSelected -> Color(0x4D6366F1)
             isFocused -> TvFocusCardBackground
-            app.isSelected -> GlassSurface.copy(alpha = 0.15f)
+            app.isSelected -> Color(0x336366F1) // Clear luminous indigo fill for selected cards
             else -> GlassSurface
         },
         label = "bgColor"
@@ -89,7 +96,7 @@ fun AppCard(
             .clip(RoundedCornerShape(18.dp))
             .background(backgroundColor)
             .border(
-                width = if (isFocused) 2.5.dp else 1.dp,
+                width = borderWidth,
                 color = borderColor,
                 shape = RoundedCornerShape(18.dp)
             )
@@ -118,7 +125,7 @@ fun AppCard(
             // App Icon
             AppIconImage(
                 drawable = app.iconDrawable,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(46.dp)
             )
 
             Spacer(modifier = Modifier.width(14.dp))
@@ -127,14 +134,37 @@ fun AppCard(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = app.appName,
-                    color = TextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    lineHeight = 18.sp,
-                    maxLines = 3
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = app.appName,
+                        color = TextPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 19.sp,
+                        maxLines = 3,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (app.isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF818CF8).copy(alpha = 0.25f))
+                                .border(1.dp, Color(0xFF818CF8), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "SELECTED",
+                                color = Color(0xFFA5B4FC),
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = app.packageName,
@@ -156,18 +186,18 @@ fun AppCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Custom Checkbox Vector Indicator (Zero emojis)
+                // Custom Checkbox Vector Indicator (Zero emojis, high contrast)
                 Box(
                     modifier = Modifier
-                        .size(22.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                        .size(26.dp)
+                        .clip(RoundedCornerShape(8.dp))
                         .background(
-                            if (app.isSelected) ElectricIndigo else Color(0x22FFFFFF)
+                            if (app.isSelected) Color(0xFF6366F1) else Color(0x1AFFFFFF)
                         )
                         .border(
-                            width = 1.dp,
-                            color = if (app.isSelected) ElectricIndigo else Color(0x44FFFFFF),
-                            shape = RoundedCornerShape(6.dp)
+                            width = if (app.isSelected) 2.dp else 1.dp,
+                            color = if (app.isSelected) Color(0xFFA5B4FC) else Color(0x4DFFFFFF),
+                            shape = RoundedCornerShape(8.dp)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -176,7 +206,7 @@ fun AppCard(
                             imageVector = Icons.Rounded.Check,
                             contentDescription = "Selected",
                             tint = Color.White,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -199,6 +229,12 @@ fun StatusBadge(status: CompileStatus) {
             NeonEmerald.copy(alpha = 0.15f),
             NeonEmerald.copy(alpha = 0.4f),
             NeonEmerald
+        )
+        CompileStatus.EVERYTHING -> Quad(
+            "COMPILED: ALL",
+            ElectricIndigo.copy(alpha = 0.2f),
+            ElectricIndigo.copy(alpha = 0.6f),
+            ElectricIndigo
         )
         CompileStatus.UNCOMPILED -> Quad(
             "UNCOMPILED",

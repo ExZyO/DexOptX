@@ -1,9 +1,9 @@
 {
-  "version": "1.0.2",
-  "versionCode": 3,
-  "apkUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.2/DexOptX-v1.0.2-release.apk",
-  "downloadUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.2/DexOptX-v1.0.2-release.apk",
-  "releasePage": "https://github.com/ExZyO/DexOptX/releases/tag/v1.0.2",
+  "version": "1.0.3",
+  "versionCode": 4,
+  "apkUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.3/DexOptX-v1.0.3-release.apk",
+  "downloadUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.3/DexOptX-v1.0.3-release.apk",
+  "releasePage": "https://github.com/ExZyO/DexOptX/releases/tag/v1.0.3",
   "releaseDate": "2026-10-18",
-  "releaseNotes": "v1.0.2: Compilation cancel/stop button, tab-specific selection counter fix, multi-source update checker with GitHub Actions build tracker, signed 64-bit ARMv8-A release."
+  "releaseNotes": "v1.0.3: Dual-tier status filtering (Uncompiled/Compiled/Recent), background compilation with floating MiniBar, high-contrast selected cards, D-pad remote focusable TV compile profile, direct Root fallback, and Android TV Shizuku setup guide."
 }

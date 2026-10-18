@@ -35,6 +35,8 @@ fun MainScreen(
             TvLayout(
                 uiState = uiState,
                 onSearchChange = viewModel::onSearchQueryChange,
+                onCategoryChange = viewModel::onCategoryChange,
+                onStatusFilterChange = viewModel::onStatusFilterChange,
                 onFilterChange = viewModel::onFilterChange,
                 onToggleApp = viewModel::onToggleAppSelection,
                 onSelectAll = viewModel::onSelectAll,
@@ -44,12 +46,16 @@ fun MainScreen(
                 onRequestShizuku = viewModel::requestShizukuPermission,
                 onCheckUpdate = { viewModel.checkForUpdates(isManual = true) },
                 onDownloadUpdate = viewModel::performDownloadUpdate,
-                onDismissUpdate = viewModel::dismissUpdateBanner
+                onDismissUpdate = viewModel::dismissUpdateBanner,
+                onOpenConsole = viewModel::openConsoleDialog,
+                onCancelOptimization = viewModel::cancelOptimization
             )
         } else {
             PhoneLayout(
                 uiState = uiState,
                 onSearchChange = viewModel::onSearchQueryChange,
+                onCategoryChange = viewModel::onCategoryChange,
+                onStatusFilterChange = viewModel::onStatusFilterChange,
                 onFilterChange = viewModel::onFilterChange,
                 onToggleApp = viewModel::onToggleAppSelection,
                 onSelectAll = viewModel::onSelectAll,
@@ -59,7 +65,9 @@ fun MainScreen(
                 onRequestShizuku = viewModel::requestShizukuPermission,
                 onCheckUpdate = { viewModel.checkForUpdates(isManual = true) },
                 onDownloadUpdate = viewModel::performDownloadUpdate,
-                onDismissUpdate = viewModel::dismissUpdateBanner
+                onDismissUpdate = viewModel::dismissUpdateBanner,
+                onOpenConsole = viewModel::openConsoleDialog,
+                onCancelOptimization = viewModel::cancelOptimization
             )
         }
 

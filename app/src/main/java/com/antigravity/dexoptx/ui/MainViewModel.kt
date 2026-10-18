@@ -14,6 +14,20 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+enum class CategoryFilter(val label: String) {
+    USER_ONLY("USER APPS"),
+    SYSTEM_ONLY("SYSTEM"),
+    ALL("ALL APPS")
+}
+
+enum class StatusFilter(val label: String) {
+    ALL("ALL STATUS"),
+    UNCOMPILED("UNCOMPILED"),
+    COMPILED("COMPILED"),
+    RECENTLY_UPDATED("RECENT UPDATES")
+}
+
+// Kept for backward compatibility
 enum class AppFilter(val label: String) {
     ALL("ALL"),
     USER_ONLY("USER APPS"),
@@ -26,6 +40,8 @@ data class MainUiState(
     val allApps: List<AppInfo> = emptyList(),
     val filteredApps: List<AppInfo> = emptyList(),
     val searchQuery: String = "",
+    val activeCategory: CategoryFilter = CategoryFilter.USER_ONLY,
+    val activeStatusFilter: StatusFilter = StatusFilter.ALL,
     val activeFilter: AppFilter = AppFilter.USER_ONLY,
     val compileMode: String = "speed-profile",
     val isShizukuConnected: Boolean = false,
@@ -140,12 +156,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshShizukuStatus() {
         val available = shizukuController.isShizukuAvailable()
         val granted = shizukuController.isPermissionGranted()
-        _uiState.update { it.copy(isShizukuConnected = available && granted) }
+        val isReady = available && granted
+        _uiState.update { it.copy(isShizukuConnected = isReady) }
+        if (isReady) {
+            refreshCompilationStatuses()
+        }
     }
 
     fun requestShizukuPermission() {
         shizukuController.requestPermission { granted ->
             _uiState.update { it.copy(isShizukuConnected = granted) }
+            if (granted) {
+                refreshCompilationStatuses()
+            }
         }
     }
 
@@ -157,8 +180,55 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 state.copy(
                     isLoading = false,
                     allApps = apps,
-                    filteredApps = applyFilters(apps, state.searchQuery, state.activeFilter)
+                    filteredApps = applyFilters(apps, state.searchQuery, state.activeCategory, state.activeStatusFilter)
                 )
+            }
+            if (_uiState.value.isShizukuConnected) {
+                refreshCompilationStatuses()
+            }
+        }
+    }
+
+    fun refreshCompilationStatuses() {
+        if (!_uiState.value.isShizukuConnected) return
+        viewModelScope.launch {
+            try {
+                val statusMap = mutableMapOf<String, CompileStatus>()
+                var currentPkg: String? = null
+
+                shizukuController.executeCommand(arrayOf("dumpsys", "package", "dexopt")).collect { line ->
+                    val trimmed = line.trim()
+                    if (trimmed.startsWith("[") && trimmed.endsWith("]") && !trimmed.contains("status=") && !trimmed.contains("reason=")) {
+                        currentPkg = trimmed.removeSurrounding("[", "]").trim()
+                    } else if (currentPkg != null) {
+                        if (trimmed.contains("status=")) {
+                            val statusStr = trimmed.substringAfter("status=").substringBefore("]").substringBefore(" ").trim().lowercase()
+                            val status = when {
+                                statusStr.contains("speed-profile") -> CompileStatus.SPEED_PROFILE
+                                statusStr.contains("speed") -> CompileStatus.SPEED
+                                statusStr.contains("everything") -> CompileStatus.EVERYTHING
+                                statusStr.contains("verify") || statusStr.contains("extract") || statusStr.contains("quicken") || statusStr.contains("run-from-apk") -> CompileStatus.UNCOMPILED
+                                else -> CompileStatus.UNKNOWN
+                            }
+                            statusMap[currentPkg!!] = status
+                            currentPkg = null
+                        }
+                    }
+                }
+
+                if (statusMap.isNotEmpty()) {
+                    _uiState.update { state ->
+                        val updated = state.allApps.map { app ->
+                            statusMap[app.packageName]?.let { app.copy(compileStatus = it) } ?: app
+                        }
+                        state.copy(
+                            allApps = updated,
+                            filteredApps = applyFilters(updated, state.searchQuery, state.activeCategory, state.activeStatusFilter)
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore parse failures
             }
         }
     }
@@ -167,16 +237,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             state.copy(
                 searchQuery = query,
-                filteredApps = applyFilters(state.allApps, query, state.activeFilter)
+                filteredApps = applyFilters(state.allApps, query, state.activeCategory, state.activeStatusFilter)
             )
         }
     }
 
-    fun onFilterChange(filter: AppFilter) {
+    fun onCategoryChange(category: CategoryFilter) {
         _uiState.update { state ->
             state.copy(
+                activeCategory = category,
+                filteredApps = applyFilters(state.allApps, state.searchQuery, category, state.activeStatusFilter)
+            )
+        }
+    }
+
+    fun onStatusFilterChange(status: StatusFilter) {
+        _uiState.update { state ->
+            state.copy(
+                activeStatusFilter = status,
+                filteredApps = applyFilters(state.allApps, state.searchQuery, state.activeCategory, status)
+            )
+        }
+    }
+
+    // Kept for backward compatibility
+    fun onFilterChange(filter: AppFilter) {
+        val cat = when (filter) {
+            AppFilter.USER_ONLY -> CategoryFilter.USER_ONLY
+            AppFilter.SYSTEM_ONLY -> CategoryFilter.SYSTEM_ONLY
+            AppFilter.ALL -> CategoryFilter.ALL
+            AppFilter.RECENTLY_UPDATED -> CategoryFilter.ALL
+        }
+        val stat = if (filter == AppFilter.RECENTLY_UPDATED) StatusFilter.RECENTLY_UPDATED else StatusFilter.ALL
+        _uiState.update { state ->
+            state.copy(
+                activeCategory = cat,
+                activeStatusFilter = stat,
                 activeFilter = filter,
-                filteredApps = applyFilters(state.allApps, state.searchQuery, filter)
+                filteredApps = applyFilters(state.allApps, state.searchQuery, cat, stat)
             )
         }
     }
@@ -188,7 +286,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             state.copy(
                 allApps = updatedAll,
-                filteredApps = applyFilters(updatedAll, state.searchQuery, state.activeFilter)
+                filteredApps = applyFilters(updatedAll, state.searchQuery, state.activeCategory, state.activeStatusFilter)
             )
         }
     }
@@ -197,27 +295,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             val visiblePackageNames = state.filteredApps.map { it.packageName }.toSet()
             val updatedAll = state.allApps.map {
-                it.copy(isSelected = it.packageName in visiblePackageNames)
+                if (it.packageName in visiblePackageNames) it.copy(isSelected = true) else it
             }
             state.copy(
                 allApps = updatedAll,
-                filteredApps = applyFilters(updatedAll, state.searchQuery, state.activeFilter)
+                filteredApps = applyFilters(updatedAll, state.searchQuery, state.activeCategory, state.activeStatusFilter)
             )
         }
     }
 
     fun onDeselectAll() {
         _uiState.update { state ->
-            val updatedAll = state.allApps.map { it.copy(isSelected = false) }
+            val visiblePackageNames = state.filteredApps.map { it.packageName }.toSet()
+            val updatedAll = state.allApps.map {
+                if (it.packageName in visiblePackageNames) it.copy(isSelected = false) else it
+            }
             state.copy(
                 allApps = updatedAll,
-                filteredApps = applyFilters(updatedAll, state.searchQuery, state.activeFilter)
+                filteredApps = applyFilters(updatedAll, state.searchQuery, state.activeCategory, state.activeStatusFilter)
             )
         }
     }
 
     fun onCompileModeChange(mode: String) {
         _uiState.update { it.copy(compileMode = mode) }
+    }
+
+    fun openConsoleDialog() {
+        _uiState.update { it.copy(showConsoleDialog = true) }
     }
 
     fun closeConsoleDialog() {
@@ -272,43 +377,64 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (!this@launch.isActive) return@collect
                     _uiState.update { it.copy(consoleLogs = it.consoleLogs + line) }
                 }
+
+                // Update app compiled status in memory immediately
+                val newStatus = when (mode) {
+                    "speed" -> CompileStatus.SPEED
+                    "speed-profile" -> CompileStatus.SPEED_PROFILE
+                    "everything" -> CompileStatus.EVERYTHING
+                    else -> CompileStatus.SPEED
+                }
+                _uiState.update { state ->
+                    val updated = state.allApps.map {
+                        if (it.packageName == app.packageName) it.copy(compileStatus = newStatus) else it
+                    }
+                    state.copy(
+                        allApps = updated,
+                        filteredApps = applyFilters(updated, state.searchQuery, state.activeCategory, state.activeStatusFilter)
+                    )
+                }
             }
 
             if (isActive) {
-                // Trigger system-wide background dexopt pass to sweep containers
-                _uiState.update { it.copy(consoleLogs = it.consoleLogs + "Running system maintenance sweep (cmd package bg-dexopt-job)...") }
-                shizukuController.executeCommand(arrayOf("cmd", "package", "bg-dexopt-job")).collect { line ->
-                    if (!this@launch.isActive) return@collect
-                    _uiState.update { it.copy(consoleLogs = it.consoleLogs + line) }
-                }
-
                 _uiState.update {
                     it.copy(
                         isCompiling = false,
-                        consoleLogs = it.consoleLogs + "Optimization pass completed successfully!"
+                        consoleLogs = it.consoleLogs + "[COMPLETE] All ${selected.size} apps optimized successfully."
                     )
                 }
             }
         }
     }
 
-    private fun applyFilters(apps: List<AppInfo>, query: String, filter: AppFilter): List<AppInfo> {
+    private fun applyFilters(
+        apps: List<AppInfo>,
+        query: String,
+        category: CategoryFilter,
+        status: StatusFilter
+    ): List<AppInfo> {
         val now = System.currentTimeMillis()
         val sevenDaysMs = 7L * 24 * 60 * 60 * 1000
 
         return apps.filter { app ->
-            val matchesFilter = when (filter) {
-                AppFilter.ALL -> true
-                AppFilter.USER_ONLY -> !app.isSystemApp
-                AppFilter.SYSTEM_ONLY -> app.isSystemApp
-                AppFilter.RECENTLY_UPDATED -> (now - app.lastUpdateTime) < sevenDaysMs
+            val matchesCategory = when (category) {
+                CategoryFilter.ALL -> true
+                CategoryFilter.USER_ONLY -> !app.isSystemApp
+                CategoryFilter.SYSTEM_ONLY -> app.isSystemApp
+            }
+
+            val matchesStatus = when (status) {
+                StatusFilter.ALL -> true
+                StatusFilter.UNCOMPILED -> app.compileStatus == CompileStatus.UNCOMPILED || (!app.compileStatus.isCompiled && app.compileStatus != CompileStatus.UNKNOWN)
+                StatusFilter.COMPILED -> app.compileStatus.isCompiled
+                StatusFilter.RECENTLY_UPDATED -> (now - app.lastUpdateTime) < sevenDaysMs
             }
 
             val matchesQuery = query.isBlank() ||
                     app.appName.contains(query, ignoreCase = true) ||
                     app.packageName.contains(query, ignoreCase = true)
 
-            matchesFilter && matchesQuery
+            matchesCategory && matchesStatus && matchesQuery
         }
     }
 }

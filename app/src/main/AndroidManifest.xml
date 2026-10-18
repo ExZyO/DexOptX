@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesCondition" />
 
+    <!-- Internet permissions for GitHub Releases and GitHub Actions update checking -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- Android TV compatibility declarations -->
     <uses-feature
         android:name="android.software.leanback"
