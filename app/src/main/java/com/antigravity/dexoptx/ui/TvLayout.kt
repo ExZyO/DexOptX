@@ -3,8 +3,8 @@ package com.antigravity.dexoptx.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,15 +43,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.antigravity.dexoptx.AppVersion
 import com.antigravity.dexoptx.theme.DarkMidnight
 import com.antigravity.dexoptx.theme.ElectricIndigo
 import com.antigravity.dexoptx.theme.ElectricViolet
@@ -64,8 +65,60 @@ import com.antigravity.dexoptx.ui.components.AppCard
 import com.antigravity.dexoptx.ui.components.CompilationMiniBar
 import com.antigravity.dexoptx.ui.components.UpdateBanner
 
-private val TvCyanFocusBorder = Color(0xFF38BDF8)
-private val TvCyanFocusFill = Color(0x4038BDF8)
+val TvCyanFocusBorder = Color(0xFF38BDF8)
+val TvCyanFocusFill = Color(0x4038BDF8)
+
+/**
+ * Standard Android TV focusable interactive container.
+ * Automatically highlights with an electric cyan border upon D-pad hover,
+ * and triggers onClick on the very first remote press.
+ */
+@Composable
+fun TvInteractiveBox(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isSelected: Boolean = false,
+    selectedColor: Color = ElectricIndigo,
+    selectedBorderColor: Color = ElectricViolet,
+    shape: RoundedCornerShape = RoundedCornerShape(10.dp),
+    focusBorderWidth: Dp = 3.5.dp,
+    unfocusedBorderWidth: Dp = 1.dp,
+    enabled: Boolean = true,
+    focusRequester: FocusRequester? = null,
+    content: @Composable (isFocused: Boolean) -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val borderWidth = if (isFocused) focusBorderWidth else unfocusedBorderWidth
+    val borderColor = when {
+        isFocused -> TvCyanFocusBorder
+        isSelected -> selectedBorderColor
+        else -> GlassBorder
+    }
+    val backgroundColor = when {
+        isFocused -> TvCyanFocusFill
+        isSelected -> selectedColor
+        else -> Color(0x18FFFFFF)
+    }
+
+    Box(
+        modifier = modifier
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .clip(shape)
+            .background(backgroundColor)
+            .border(width = borderWidth, color = borderColor, shape = shape)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null
+            ) {
+                onClick()
+            }
+    ) {
+        content(isFocused)
+    }
+}
 
 @Composable
 fun TvLayout(
@@ -138,7 +191,7 @@ fun TvLayout(
                     letterSpacing = 1.sp
                 )
                 Text(
-                    text = "Nvidia Shield • v1.0.3 • ARM64",
+                    text = AppVersion.TV_LABEL,
                     color = TextMuted,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
@@ -147,29 +200,18 @@ fun TvLayout(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Check for Updates Button
-                var isCheckUpdateFocused by remember { mutableStateOf(false) }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isCheckUpdateFocused) TvCyanFocusFill else Color(0x18FFFFFF))
-                        .border(
-                            width = if (isCheckUpdateFocused) 3.dp else 1.dp,
-                            color = if (isCheckUpdateFocused) TvCyanFocusBorder else GlassBorder,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .focusable()
-                        .onFocusChanged { isCheckUpdateFocused = it.isFocused }
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                            onCheckUpdate()
-                        }
-                        .padding(horizontal = 10.dp, vertical = 7.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                TvInteractiveBox(
+                    onClick = onCheckUpdate,
+                    modifier = Modifier.fillMaxWidth()
+                ) { isFocused ->
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
                             imageVector = Icons.Rounded.Bolt,
                             contentDescription = null,
-                            tint = if (isCheckUpdateFocused) TvCyanFocusBorder else TextPrimary,
+                            tint = if (isFocused) TvCyanFocusBorder else TextPrimary,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -186,64 +228,44 @@ fun TvLayout(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Shizuku / Root Status Pill + TV Help Guide
-                var isShizukuFocused by remember { mutableStateOf(false) }
-                var isHelpFocused by remember { mutableStateOf(false) }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (isShizukuFocused) TvCyanFocusFill
-                                else (if (uiState.isShizukuConnected) NeonEmerald.copy(alpha = 0.15f) else Color(0x33EF4444))
+                    TvInteractiveBox(
+                        onClick = onRequestShizuku,
+                        modifier = Modifier.weight(1f),
+                        isSelected = uiState.isShizukuConnected,
+                        selectedColor = NeonEmerald.copy(alpha = 0.15f),
+                        selectedBorderColor = NeonEmerald.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { isFocused ->
+                        Box(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                            Text(
+                                text = if (uiState.isShizukuConnected) "ROOT/SHIZUKU ACTIVE" else "CONNECT SHIZUKU/ROOT",
+                                color = if (isFocused) Color.White else (if (uiState.isShizukuConnected) NeonEmerald else Color(0xFFFCA5A5)),
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
                             )
-                            .border(
-                                width = if (isShizukuFocused) 3.dp else 1.dp,
-                                color = if (isShizukuFocused) TvCyanFocusBorder else (if (uiState.isShizukuConnected) NeonEmerald.copy(alpha = 0.4f) else Color(0x66EF4444)),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .focusable()
-                            .onFocusChanged { isShizukuFocused = it.isFocused }
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                onRequestShizuku()
-                            }
-                            .padding(horizontal = 10.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = if (uiState.isShizukuConnected) "ROOT/SHIZUKU ACTIVE" else "CONNECT SHIZUKU/ROOT",
-                            color = if (isShizukuFocused) Color.White else (if (uiState.isShizukuConnected) NeonEmerald else Color(0xFFFCA5A5)),
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
-                        )
+                        }
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isHelpFocused) TvCyanFocusFill else Color(0x22FFFFFF))
-                            .border(
-                                width = if (isHelpFocused) 3.dp else 1.dp,
-                                color = if (isHelpFocused) TvCyanFocusBorder else GlassBorder,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .focusable()
-                            .onFocusChanged { isHelpFocused = it.isFocused }
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                showTvHelpDialog = true
-                            }
-                            .padding(8.dp),
-                        contentAlignment = Alignment.Center
+                    TvInteractiveBox(
+                        onClick = { showTvHelpDialog = true },
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.HelpOutline,
-                            contentDescription = "Shield TV Setup Guide",
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Box(
+                            modifier = Modifier.padding(8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.HelpOutline,
+                                contentDescription = "Shield TV Setup Guide",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
 
@@ -262,53 +284,38 @@ fun TvLayout(
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     CategoryFilter.values().forEachIndexed { index, cat ->
-                        val isSelected = uiState.activeCategory == cat
-                        var isCatFocused by remember { mutableStateOf(false) }
+                        val isCatSelected = uiState.activeCategory == cat
                         val count = when (cat) {
                             CategoryFilter.ALL -> uiState.allApps.size
                             CategoryFilter.USER_ONLY -> uiState.allApps.count { !it.isSystemApp }
                             CategoryFilter.SYSTEM_ONLY -> uiState.allApps.count { it.isSystemApp }
                         }
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(if (index == 0) Modifier.focusRequester(initialFocusRequester) else Modifier)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    when {
-                                        isCatFocused -> TvCyanFocusFill
-                                        isSelected -> ElectricIndigo
-                                        else -> Color(0x18FFFFFF)
-                                    }
-                                )
-                                .border(
-                                    width = if (isCatFocused) 3.dp else 1.dp,
-                                    color = if (isCatFocused) TvCyanFocusBorder else (if (isSelected) ElectricViolet else GlassBorder),
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                .focusable()
-                                .onFocusChanged { isCatFocused = it.isFocused }
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                    onCategoryChange(cat)
-                                }
-                                .padding(horizontal = 10.dp, vertical = 7.dp)
-                        ) {
+                        TvInteractiveBox(
+                            onClick = { onCategoryChange(cat) },
+                            modifier = Modifier.fillMaxWidth(),
+                            isSelected = isCatSelected,
+                            selectedColor = ElectricIndigo,
+                            selectedBorderColor = ElectricViolet,
+                            focusRequester = if (index == 0) initialFocusRequester else null
+                        ) { isFocused ->
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 7.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
                                     text = cat.label,
-                                    color = if (isCatFocused || isSelected) Color.White else TextPrimary,
+                                    color = if (isFocused || isCatSelected) Color.White else TextPrimary,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
                                     text = "$count",
-                                    color = if (isCatFocused || isSelected) Color.White else TextMuted,
+                                    color = if (isFocused || isCatSelected) Color.White else TextMuted,
                                     fontSize = 10.sp,
                                     fontFamily = FontFamily.Monospace
                                 )
@@ -339,43 +346,31 @@ fun TvLayout(
                         Triple("OPT", StatusFilter.COMPILED, compiledInCat)
                     ).forEach { (lbl, sf, count) ->
                         val isStatSelected = uiState.activeStatusFilter == sf
-                        var isChipFocused by remember { mutableStateOf(false) }
 
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    when {
-                                        isChipFocused -> TvCyanFocusFill
-                                        isStatSelected -> Color(0xFF334155)
-                                        else -> Color(0x18FFFFFF)
-                                    }
-                                )
-                                .border(
-                                    width = if (isChipFocused) 3.dp else 1.dp,
-                                    color = if (isChipFocused) TvCyanFocusBorder else (if (isStatSelected) Color(0xFF94A3B8) else GlassBorder),
-                                    shape = RoundedCornerShape(8.dp)
-                                )
-                                .focusable()
-                                .onFocusChanged { isChipFocused = it.isFocused }
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                    onStatusFilterChange(sf)
-                                }
-                                .padding(vertical = 5.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        TvInteractiveBox(
+                            onClick = { onStatusFilterChange(sf) },
+                            modifier = Modifier.weight(1f),
+                            isSelected = isStatSelected,
+                            selectedColor = Color(0xFF334155),
+                            selectedBorderColor = Color(0xFF94A3B8),
+                            shape = RoundedCornerShape(8.dp)
+                        ) { isFocused ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 5.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
                                 Text(
                                     text = lbl,
-                                    color = if (isChipFocused || isStatSelected) Color.White else TextMuted,
+                                    color = if (isFocused || isStatSelected) Color.White else TextMuted,
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
                                     text = "($count)",
-                                    color = if (isChipFocused || isStatSelected) Color.White else TextMuted,
+                                    color = if (isFocused || isStatSelected) Color.White else TextMuted,
                                     fontSize = 8.sp,
                                     fontFamily = FontFamily.Monospace
                                 )
@@ -405,39 +400,28 @@ fun TvLayout(
                         "SPEED" to "speed"
                     ).forEach { (label, mode) ->
                         val isModeActive = uiState.compileMode == mode
-                        var isModeFocused by remember { mutableStateOf(false) }
 
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    when {
-                                        isModeFocused -> TvCyanFocusFill
-                                        isModeActive -> ElectricIndigo
-                                        else -> Color(0x18FFFFFF)
-                                    }
+                        TvInteractiveBox(
+                            onClick = { onModeChange(mode) },
+                            modifier = Modifier.weight(1f),
+                            isSelected = isModeActive,
+                            selectedColor = ElectricIndigo,
+                            selectedBorderColor = ElectricViolet
+                        ) { isFocused ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 7.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (isFocused || isModeActive) Color.White else TextMuted,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
                                 )
-                                .border(
-                                    width = if (isModeFocused) 3.dp else 1.dp,
-                                    color = if (isModeFocused) TvCyanFocusBorder else (if (isModeActive) ElectricViolet else GlassBorder),
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                .focusable()
-                                .onFocusChanged { isModeFocused = it.isFocused }
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                    onModeChange(mode)
-                                }
-                                .padding(vertical = 7.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = label,
-                                color = if (isModeFocused || isModeActive) Color.White else TextMuted,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
+                            }
                         }
                     }
                 }
@@ -449,80 +433,57 @@ fun TvLayout(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    var isSelectAllFocused by remember { mutableStateOf(false) }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isSelectAllFocused) TvCyanFocusFill else Color(0x22FFFFFF))
-                            .border(
-                                width = if (isSelectAllFocused) 3.dp else 1.dp,
-                                color = if (isSelectAllFocused) TvCyanFocusBorder else GlassBorder,
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .focusable()
-                            .onFocusChanged { isSelectAllFocused = it.isFocused }
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                onSelectAll()
-                            }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
+                    TvInteractiveBox(
+                        onClick = onSelectAll,
+                        modifier = Modifier.weight(1f),
+                        selectedColor = Color(0x22FFFFFF)
                     ) {
-                        Text("SELECT ALL", color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("SELECT ALL", color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        }
                     }
 
-                    var isClearFocused by remember { mutableStateOf(false) }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isClearFocused) TvCyanFocusFill else Color(0x22FFFFFF))
-                            .border(
-                                width = if (isClearFocused) 3.dp else 1.dp,
-                                color = if (isClearFocused) TvCyanFocusBorder else GlassBorder,
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .focusable()
-                            .onFocusChanged { isClearFocused = it.isFocused }
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                onDeselectAll()
-                            }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
+                    TvInteractiveBox(
+                        onClick = onDeselectAll,
+                        modifier = Modifier.weight(1f),
+                        selectedColor = Color(0x22FFFFFF)
                     ) {
-                        Text("CLEAR", color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("CLEAR", color = Color.White, fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Big Primary Optimize Button
-                var isOptimizeFocused by remember { mutableStateOf(false) }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(
-                            when {
-                                selectedCount == 0 -> Color(0x18FFFFFF)
-                                isOptimizeFocused -> Color(0xFF4F46E5)
-                                else -> ElectricIndigo
-                            }
-                        )
-                        .border(
-                            width = if (isOptimizeFocused) 3.5.dp else 1.dp,
-                            color = if (isOptimizeFocused) TvCyanFocusBorder else (if (selectedCount > 0) ElectricViolet else Color.Transparent),
-                            shape = RoundedCornerShape(14.dp)
-                        )
-                        .focusable(enabled = selectedCount > 0)
-                        .onFocusChanged { isOptimizeFocused = it.isFocused }
-                        .clickable(enabled = selectedCount > 0, interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                            onOptimizeClick()
-                        }
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                TvInteractiveBox(
+                    onClick = onOptimizeClick,
+                    enabled = selectedCount > 0,
+                    modifier = Modifier.fillMaxWidth(),
+                    isSelected = selectedCount > 0,
+                    selectedColor = ElectricIndigo,
+                    selectedBorderColor = ElectricViolet,
+                    shape = RoundedCornerShape(14.dp),
+                    focusBorderWidth = 4.dp
+                ) { isFocused ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
                         Icon(
                             imageVector = Icons.Rounded.Bolt,
                             contentDescription = null,
@@ -550,14 +511,16 @@ fun TvLayout(
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 // Search Input
-                var isSearchFocused by remember { mutableStateOf(false) }
+                val searchInteractionSource = remember { MutableInteractionSource() }
+                val isSearchFocused by searchInteractionSource.collectIsFocusedAsState()
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(if (isSearchFocused) TvCyanFocusFill else GlassSurface)
                         .border(
-                            width = if (isSearchFocused) 3.dp else 1.dp,
+                            width = if (isSearchFocused) 3.5.dp else 1.dp,
                             color = if (isSearchFocused) TvCyanFocusBorder else GlassBorder,
                             shape = RoundedCornerShape(16.dp)
                         )
@@ -585,9 +548,8 @@ fun TvLayout(
                                 singleLine = true,
                                 textStyle = TextStyle(color = TextPrimary, fontSize = 13.sp),
                                 cursorBrush = SolidColor(ElectricIndigo),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .onFocusChanged { isSearchFocused = it.isFocused }
+                                interactionSource = searchInteractionSource,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
@@ -714,26 +676,21 @@ fun TvLayout(
                         lineHeight = 16.sp
                     )
                     Spacer(modifier = Modifier.height(18.dp))
-                    var isCloseFocused by remember { mutableStateOf(false) }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isCloseFocused) TvCyanFocusFill else ElectricIndigo)
-                            .border(
-                                width = if (isCloseFocused) 3.dp else 1.dp,
-                                color = if (isCloseFocused) TvCyanFocusBorder else GlassBorder,
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .focusable()
-                            .onFocusChanged { isCloseFocused = it.isFocused }
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                showTvHelpDialog = false
-                            }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
+                    TvInteractiveBox(
+                        onClick = { showTvHelpDialog = false },
+                        modifier = Modifier.fillMaxWidth(),
+                        isSelected = true,
+                        selectedColor = ElectricIndigo,
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("GOT IT // CLOSE", color = Color.White, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("GOT IT // CLOSE", color = Color.White, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

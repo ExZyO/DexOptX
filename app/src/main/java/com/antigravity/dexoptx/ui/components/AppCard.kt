@@ -8,8 +8,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,7 +63,8 @@ fun AppCard(
     onToggleSelect: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
     val scale by animateFloatAsState(targetValue = if (isFocused) 1.04f else 1.0f, label = "cardScale")
     val borderColor by animateColorAsState(
@@ -101,10 +102,8 @@ fun AppCard(
                 color = borderColor,
                 shape = RoundedCornerShape(18.dp)
             )
-            .focusable()
-            .onFocusChanged { isFocused = it.isFocused }
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = interactionSource,
                 indication = null
             ) {
                 onToggleSelect()
@@ -123,86 +122,32 @@ fun AppCard(
 
             Spacer(modifier = Modifier.width(14.dp))
 
-            // App Name & Package Info (Full Names with wrapping, NO ellipsis cutoffs)
+            // App Name & Package Info (Full Names with proper horizontal space, NO vertical syllable breaks)
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = app.appName,
-                        color = TextPrimary,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        lineHeight = 19.sp,
-                        maxLines = 3,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (isFocused && app.isSelected) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF6366F1))
-                                .border(1.dp, Color.White, RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "SELECTED • FOCUS",
-                                color = Color.White,
-                                fontSize = 9.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    } else if (isFocused) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF0284C7))
-                                .border(1.dp, Color(0xFF38BDF8), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "FOCUSED",
-                                color = Color.White,
-                                fontSize = 9.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    } else if (app.isSelected) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF818CF8).copy(alpha = 0.25f))
-                                .border(1.dp, Color(0xFF818CF8), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "SELECTED",
-                                color = Color(0xFFA5B4FC),
-                                fontSize = 9.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = app.appName,
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 19.sp,
+                    maxLines = 2
+                )
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     text = app.packageName,
                     color = TextMuted,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
-                    lineHeight = 14.sp
+                    lineHeight = 14.sp,
+                    maxLines = 1
                 )
             }
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Status Badge & Selection Indicator
+            // Status Badge & Selection Indicator Row
             Column(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.Center
@@ -211,28 +156,51 @@ fun AppCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Custom Checkbox Vector Indicator (Zero emojis, high contrast)
-                Box(
-                    modifier = Modifier
-                        .size(26.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (app.isSelected) Color(0xFF6366F1) else Color(0x1AFFFFFF)
-                        )
-                        .border(
-                            width = if (app.isSelected) 2.dp else 1.dp,
-                            color = if (app.isSelected) Color(0xFFA5B4FC) else Color(0x4DFFFFFF),
-                            shape = RoundedCornerShape(8.dp)
-                        ),
-                    contentAlignment = Alignment.Center
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (app.isSelected) {
-                        Icon(
-                            imageVector = Icons.Rounded.Check,
-                            contentDescription = "Selected",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (isFocused) Color(0xFF6366F1) else Color(0xFF818CF8).copy(alpha = 0.25f))
+                                .border(1.dp, if (isFocused) Color.White else Color(0xFF818CF8), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "SELECTED",
+                                color = if (isFocused) Color.White else Color(0xFFA5B4FC),
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Custom Checkbox Vector Indicator (Zero emojis, high contrast)
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (app.isSelected) Color(0xFF6366F1) else Color(0x1AFFFFFF)
+                            )
+                            .border(
+                                width = if (app.isSelected) 2.dp else 1.dp,
+                                color = if (app.isSelected) Color(0xFFA5B4FC) else Color(0x4DFFFFFF),
+                                shape = RoundedCornerShape(8.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (app.isSelected) {
+                            Icon(
+                                imageVector = Icons.Rounded.Check,
+                                contentDescription = "Selected",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }

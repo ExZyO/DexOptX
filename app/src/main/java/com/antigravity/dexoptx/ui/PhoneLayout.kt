@@ -107,7 +107,7 @@ fun PhoneLayout(
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = "v1.0.3 • ARM64",
+                        text = com.antigravity.dexoptx.AppVersion.LABEL,
                         color = TextMuted,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace

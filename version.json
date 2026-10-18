@@ -1,9 +1,9 @@
 {
-  "version": "1.0.4",
-  "versionCode": 5,
-  "apkUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.4/DexOptX-v1.0.4-release.apk",
-  "downloadUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.4/DexOptX-v1.0.4-release.apk",
-  "releasePage": "https://github.com/ExZyO/DexOptX/releases/tag/v1.0.4",
+  "version": "1.0.5",
+  "versionCode": 6,
+  "apkUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.5/DexOptX-v1.0.5-release.apk",
+  "downloadUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.5/DexOptX-v1.0.5-release.apk",
+  "releasePage": "https://github.com/ExZyO/DexOptX/releases/tag/v1.0.5",
   "releaseDate": "2026-10-18",
-  "releaseNotes": "v1.0.4: Fixed phone bottom dock overlap by making mini bar mutually exclusive; complete Android TV D-pad fix (resolved double-click bug, added 3.5dp electric cyan focus rings with [FOCUSED] badges, scrollable sidebar so Compile Profile is never off-screen, initial focus requester, and accurate status counts)."
+  "releaseNotes": "v1.0.5: Fixed version display label (now dynamically shows v1.0.5), eliminated two-click selector bug on TV (single tap toggles immediately), enabled electric cyan focus border highlighting across all sidebar elements on D-pad hover, and resolved vertical syllable text wrapping (e.g. Tailscale now displays cleanly across full width)."
 }
