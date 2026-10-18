@@ -36,9 +36,14 @@ class ShizukuController(private val context: Context) {
         }
     }
 
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        permissionListeners.forEach { it(isPermissionGranted()) }
+    }
+
     init {
         try {
             Shizuku.addRequestPermissionResultListener(requestListener)
+            Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
         } catch (_: Throwable) {}
     }
 
@@ -61,6 +66,8 @@ class ShizukuController(private val context: Context) {
 
     fun requestPermission(onResult: (Boolean) -> Unit) {
         if (!isShizukuAvailable()) {
+            // If Shizuku is not running, launch Shizuku so user can start it
+            openShizukuApp()
             onResult(false)
             return
         }
