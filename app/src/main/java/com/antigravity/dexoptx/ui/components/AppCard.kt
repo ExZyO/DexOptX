@@ -65,25 +65,26 @@ fun AppCard(
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
-    val scale by animateFloatAsState(targetValue = if (isFocused) 1.02f else 1.0f, label = "cardScale")
+    val scale by animateFloatAsState(targetValue = if (isFocused) 1.04f else 1.0f, label = "cardScale")
     val borderColor by animateColorAsState(
         targetValue = when {
-            isFocused && app.isSelected -> Color(0xFFA5B4FC) // Bright glowing focus on selected
-            isFocused -> TvFocusHighlight
+            isFocused && app.isSelected -> Color(0xFFFFFFFF) // Brilliant pure white for focused + selected
+            isFocused -> Color(0xFF38BDF8) // Ultra-bright electric cyan focus ring for TV
             app.isSelected -> Color(0xFF818CF8) // Bright neon border for selected
             else -> GlassBorder
         },
         label = "borderColor"
     )
     val borderWidth = when {
-        isFocused -> 3.dp
-        app.isSelected -> 2.dp
+        isFocused && app.isSelected -> 4.dp
+        isFocused -> 3.5.dp
+        app.isSelected -> 2.5.dp
         else -> 1.dp
     }
     val backgroundColor by animateColorAsState(
         targetValue = when {
-            isFocused && app.isSelected -> Color(0x4D6366F1)
-            isFocused -> TvFocusCardBackground
+            isFocused && app.isSelected -> Color(0x666366F1)
+            isFocused -> Color(0x4038BDF8) // Glowing cyan surface when focused
             app.isSelected -> Color(0x336366F1) // Clear luminous indigo fill for selected cards
             else -> GlassSurface
         },
@@ -102,14 +103,6 @@ fun AppCard(
             )
             .focusable()
             .onFocusChanged { isFocused = it.isFocused }
-            .onKeyEvent { event ->
-                if (event.key == Key.DirectionCenter || event.key == Key.Enter) {
-                    onToggleSelect()
-                    true
-                } else {
-                    false
-                }
-            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -147,7 +140,39 @@ fun AppCard(
                         maxLines = 3,
                         modifier = Modifier.weight(1f, fill = false)
                     )
-                    if (app.isSelected) {
+                    if (isFocused && app.isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF6366F1))
+                                .border(1.dp, Color.White, RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "SELECTED • FOCUS",
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else if (isFocused) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF0284C7))
+                                .border(1.dp, Color(0xFF38BDF8), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "FOCUSED",
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else if (app.isSelected) {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))

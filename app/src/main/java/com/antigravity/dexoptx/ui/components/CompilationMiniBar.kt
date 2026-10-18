@@ -27,13 +27,18 @@ import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.focusable
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -119,10 +124,18 @@ fun CompilationMiniBar(
                 // Actions: Console & Stop
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // Open Console Button
+                    var isConsoleFocused by remember { mutableStateOf(false) }
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0x22FFFFFF))
+                            .background(if (isConsoleFocused) Color(0x4038BDF8) else Color(0x22FFFFFF))
+                            .border(
+                                width = if (isConsoleFocused) 2.5.dp else 1.dp,
+                                color = if (isConsoleFocused) Color(0xFF38BDF8) else Color.Transparent,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .focusable()
+                            .onFocusChanged { isConsoleFocused = it.isFocused }
                             .clickable { onOpenConsole() }
                             .padding(horizontal = 8.dp, vertical = 5.dp),
                         contentAlignment = Alignment.Center
@@ -148,10 +161,18 @@ fun CompilationMiniBar(
                     Spacer(modifier = Modifier.width(6.dp))
 
                     // Stop Button
+                    var isStopFocused by remember { mutableStateOf(false) }
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFFDC2626))
+                            .border(
+                                width = if (isStopFocused) 2.5.dp else 1.dp,
+                                color = if (isStopFocused) Color(0xFF38BDF8) else Color.Transparent,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .focusable()
+                            .onFocusChanged { isStopFocused = it.isFocused }
                             .clickable { onCancel() }
                             .padding(horizontal = 8.dp, vertical = 5.dp),
                         contentAlignment = Alignment.Center

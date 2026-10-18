@@ -79,10 +79,8 @@ fun PhoneLayout(
         CategoryFilter.SYSTEM_ONLY -> uiState.allApps.filter { it.isSystemApp }
     }
     val totalInCat = catApps.size
-    val uncompiledInCat = catApps.count {
-        it.compileStatus == CompileStatus.UNCOMPILED || (!it.compileStatus.isCompiled && it.compileStatus != CompileStatus.UNKNOWN)
-    }
     val compiledInCat = catApps.count { it.compileStatus.isCompiled }
+    val uncompiledInCat = totalInCat - compiledInCat
     val recentInCat = catApps.count { (now - it.lastUpdateTime) < sevenDaysMs }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -347,7 +345,7 @@ fun PhoneLayout(
             }
         }
 
-        // Floating Mini Bar if compiling in background (user minimized the console)
+        // Bottom Control: When compiling in background, show CompilationMiniBar exclusively; otherwise show GlassDock
         if (uiState.isCompiling && !uiState.showConsoleDialog) {
             CompilationMiniBar(
                 currentApp = uiState.currentCompilingApp,
@@ -357,19 +355,18 @@ fun PhoneLayout(
                 onCancel = onCancelOptimization,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 20.dp, vertical = 96.dp)
+                    .padding(horizontal = 20.dp, vertical = 20.dp)
+            )
+        } else {
+            GlassDock(
+                selectedCount = uiState.filteredApps.count { it.isSelected },
+                compileMode = uiState.compileMode,
+                onModeChange = onModeChange,
+                onSelectAll = onSelectAll,
+                onDeselectAll = onDeselectAll,
+                onOptimizeClick = onOptimizeClick,
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
-
-        // Floating Glass Dock at Bottom
-        GlassDock(
-            selectedCount = uiState.filteredApps.count { it.isSelected },
-            compileMode = uiState.compileMode,
-            onModeChange = onModeChange,
-            onSelectAll = onSelectAll,
-            onDeselectAll = onDeselectAll,
-            onOptimizeClick = onOptimizeClick,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
     }
 }

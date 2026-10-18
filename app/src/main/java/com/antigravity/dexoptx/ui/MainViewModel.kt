@@ -154,9 +154,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refreshShizukuStatus() {
-        val available = shizukuController.isShizukuAvailable()
-        val granted = shizukuController.isPermissionGranted()
-        val isReady = available && granted
+        val isReady = shizukuController.isExecutionReady()
         _uiState.update { it.copy(isShizukuConnected = isReady) }
         if (isReady) {
             refreshCompilationStatuses()
@@ -164,9 +162,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun requestShizukuPermission() {
+        if (shizukuController.isRootAvailable()) {
+            _uiState.update { it.copy(isShizukuConnected = true) }
+            refreshCompilationStatuses()
+            return
+        }
         shizukuController.requestPermission { granted ->
-            _uiState.update { it.copy(isShizukuConnected = granted) }
-            if (granted) {
+            val isReady = granted || shizukuController.isRootAvailable()
+            _uiState.update { it.copy(isShizukuConnected = isReady) }
+            if (isReady) {
                 refreshCompilationStatuses()
             }
         }
@@ -195,21 +199,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val statusMap = mutableMapOf<String, CompileStatus>()
                 var currentPkg: String? = null
+                val allPackageNames = _uiState.value.allApps.map { it.packageName }.toSet()
 
                 shizukuController.executeCommand(arrayOf("dumpsys", "package", "dexopt")).collect { line ->
                     val trimmed = line.trim()
-                    if (trimmed.startsWith("[") && trimmed.endsWith("]") && !trimmed.contains("status=") && !trimmed.contains("reason=")) {
-                        currentPkg = trimmed.removeSurrounding("[", "]").trim()
-                    } else if (currentPkg != null) {
-                        if (trimmed.contains("status=")) {
-                            val statusStr = trimmed.substringAfter("status=").substringBefore("]").substringBefore(" ").trim().lowercase()
-                            val status = when {
-                                statusStr.contains("speed-profile") -> CompileStatus.SPEED_PROFILE
-                                statusStr.contains("speed") -> CompileStatus.SPEED
-                                statusStr.contains("everything") -> CompileStatus.EVERYTHING
-                                statusStr.contains("verify") || statusStr.contains("extract") || statusStr.contains("quicken") || statusStr.contains("run-from-apk") -> CompileStatus.UNCOMPILED
-                                else -> CompileStatus.UNKNOWN
-                            }
+                    
+                    val matchedPkg = allPackageNames.firstOrNull { 
+                        trimmed.contains("[$it]") || trimmed.contains(" $it") || trimmed == it 
+                    }
+                    if (matchedPkg != null) {
+                        currentPkg = matchedPkg
+                    }
+
+                    if (currentPkg != null) {
+                        val lower = trimmed.lowercase()
+                        val status = when {
+                            lower.contains("speed-profile") -> CompileStatus.SPEED_PROFILE
+                            lower.contains("speed") -> CompileStatus.SPEED
+                            lower.contains("everything") -> CompileStatus.EVERYTHING
+                            lower.contains("verify") || lower.contains("extract") || lower.contains("quicken") || lower.contains("run-from-apk") || lower.contains("interpret-only") -> CompileStatus.UNCOMPILED
+                            else -> null
+                        }
+                        if (status != null) {
                             statusMap[currentPkg!!] = status
                             currentPkg = null
                         }
@@ -425,7 +436,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val matchesStatus = when (status) {
                 StatusFilter.ALL -> true
-                StatusFilter.UNCOMPILED -> app.compileStatus == CompileStatus.UNCOMPILED || (!app.compileStatus.isCompiled && app.compileStatus != CompileStatus.UNKNOWN)
+                StatusFilter.UNCOMPILED -> !app.compileStatus.isCompiled
                 StatusFilter.COMPILED -> app.compileStatus.isCompiled
                 StatusFilter.RECENTLY_UPDATED -> (now - app.lastUpdateTime) < sevenDaysMs
             }
