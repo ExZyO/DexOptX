@@ -1,9 +1,9 @@
 {
-  "version": "1.0.5",
-  "versionCode": 6,
-  "apkUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.5/DexOptX-v1.0.5-release.apk",
-  "downloadUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.5/DexOptX-v1.0.5-release.apk",
-  "releasePage": "https://github.com/ExZyO/DexOptX/releases/tag/v1.0.5",
-  "releaseDate": "2026-10-18",
-  "releaseNotes": "v1.0.5: Fixed version display label (now dynamically shows v1.0.5), eliminated two-click selector bug on TV (single tap toggles immediately), enabled electric cyan focus border highlighting across all sidebar elements on D-pad hover, and resolved vertical syllable text wrapping (e.g. Tailscale now displays cleanly across full width)."
+  "version": "1.0.6",
+  "versionCode": 7,
+  "apkUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.6/DexOptX-v1.0.6-release.apk",
+  "downloadUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.6/DexOptX-v1.0.6-release.apk",
+  "releasePage": "https://github.com/ExZyO/DexOptX/releases/tag/v1.0.6",
+  "releaseDate": "2026-10-20",
+  "releaseNotes": "v1.0.6: Resolved ART compilation detection bugs with base.apk primary-ABI targeting, added -f force flag to guarantee compilation execution, integrated interactive Liquid Glass ART Dexopt Inspector Dialog with live on-demand recheck and single-app compile, added automatic app install/update/uninstall BroadcastReceiver and onResume lifecycle re-scan, plus full arm64-v8a zero-lag release optimization."
 }

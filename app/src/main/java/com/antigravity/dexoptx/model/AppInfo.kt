@@ -19,6 +19,9 @@ data class AppInfo(
     val isSystemApp: Boolean,
     val lastUpdateTime: Long,
     val compileStatus: CompileStatus = CompileStatus.UNKNOWN,
+    val compilationFilter: String? = null,
+    val compilationReason: String? = null,
+    val primaryAbi: String? = null,
     val isSelected: Boolean = false,
     val iconDrawable: Drawable? = null
 )

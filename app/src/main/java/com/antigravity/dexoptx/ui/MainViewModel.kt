@@ -53,7 +53,10 @@ data class MainUiState(
     val showConsoleDialog: Boolean = false,
     val availableUpdate: com.antigravity.dexoptx.updater.UpdateInfo? = null,
     val isCheckingUpdate: Boolean = false,
-    val updateStatusMessage: String? = null
+    val updateStatusMessage: String? = null,
+    val inspectingApp: AppInfo? = null,
+    val inspectingDetails: com.antigravity.dexoptx.shizuku.DexoptDetails? = null,
+    val isInspectingLoading: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -65,10 +68,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
+    private val packageReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            val action = intent?.action ?: return
+            if (action == android.content.Intent.ACTION_PACKAGE_ADDED ||
+                action == android.content.Intent.ACTION_PACKAGE_REPLACED ||
+                action == android.content.Intent.ACTION_PACKAGE_REMOVED
+            ) {
+                refreshAll()
+            }
+        }
+    }
+
     init {
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_PACKAGE_ADDED)
+            addAction(android.content.Intent.ACTION_PACKAGE_REPLACED)
+            addAction(android.content.Intent.ACTION_PACKAGE_REMOVED)
+            addDataScheme("package")
+        }
+        try {
+            application.registerReceiver(packageReceiver, filter)
+        } catch (_: Throwable) {}
+
+        refreshAll()
+        checkForUpdates(isManual = false)
+    }
+
+    fun refreshAll() {
         refreshShizukuStatus()
         loadInstalledApps()
-        checkForUpdates(isManual = false)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        try {
+            getApplication<Application>().unregisterReceiver(packageReceiver)
+        } catch (_: Throwable) {}
     }
 
     private var updatePollJob: kotlinx.coroutines.Job? = null
@@ -197,40 +233,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (!_uiState.value.isShizukuConnected) return
         viewModelScope.launch {
             try {
-                val statusMap = mutableMapOf<String, CompileStatus>()
-                var currentPkg: String? = null
-                val allPackageNames = _uiState.value.allApps.map { it.packageName }.toSet()
-
+                val rawLines = mutableListOf<String>()
                 shizukuController.executeCommand(arrayOf("dumpsys", "package", "dexopt")).collect { line ->
-                    val trimmed = line.trim()
-                    
-                    val matchedPkg = allPackageNames.firstOrNull { 
-                        trimmed.contains("[$it]") || trimmed.contains(" $it") || trimmed == it 
-                    }
-                    if (matchedPkg != null) {
-                        currentPkg = matchedPkg
-                    }
-
-                    if (currentPkg != null) {
-                        val lower = trimmed.lowercase()
-                        val status = when {
-                            lower.contains("speed-profile") -> CompileStatus.SPEED_PROFILE
-                            lower.contains("speed") -> CompileStatus.SPEED
-                            lower.contains("everything") -> CompileStatus.EVERYTHING
-                            lower.contains("verify") || lower.contains("extract") || lower.contains("quicken") || lower.contains("run-from-apk") || lower.contains("interpret-only") -> CompileStatus.UNCOMPILED
-                            else -> null
-                        }
-                        if (status != null) {
-                            statusMap[currentPkg!!] = status
-                            currentPkg = null
-                        }
-                    }
+                    rawLines.add(line)
                 }
 
-                if (statusMap.isNotEmpty()) {
+                val detailsMap = shizukuController.parseDexoptDump(rawLines)
+                if (detailsMap.isNotEmpty()) {
                     _uiState.update { state ->
                         val updated = state.allApps.map { app ->
-                            statusMap[app.packageName]?.let { app.copy(compileStatus = it) } ?: app
+                            val details = detailsMap[app.packageName]
+                            if (details != null) {
+                                app.copy(
+                                    compileStatus = details.status,
+                                    compilationFilter = details.filter,
+                                    compilationReason = details.reason,
+                                    primaryAbi = details.primaryAbi
+                                )
+                            } else {
+                                app
+                            }
                         }
                         state.copy(
                             allApps = updated,
@@ -238,7 +260,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Ignore parse failures
             }
         }
@@ -383,27 +405,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 shizukuController.executeCommand(
-                    arrayOf("cmd", "package", "compile", "-m", mode, app.packageName)
+                    arrayOf("cmd", "package", "compile", "-m", mode, "-f", app.packageName)
                 ).collect { line ->
                     if (!this@launch.isActive) return@collect
                     _uiState.update { it.copy(consoleLogs = it.consoleLogs + line) }
                 }
 
-                // Update app compiled status in memory immediately
-                val newStatus = when (mode) {
-                    "speed" -> CompileStatus.SPEED
-                    "speed-profile" -> CompileStatus.SPEED_PROFILE
-                    "everything" -> CompileStatus.EVERYTHING
-                    else -> CompileStatus.SPEED
-                }
-                _uiState.update { state ->
-                    val updated = state.allApps.map {
-                        if (it.packageName == app.packageName) it.copy(compileStatus = newStatus) else it
+                // Query ground-truth ART compilation status after compilation completes
+                val verifiedDetails = shizukuController.getAppDexoptDetails(app.packageName)
+                if (this@launch.isActive) {
+                    val verifyLog = if (verifiedDetails.status.isCompiled) {
+                        "[VERIFIED] ART Status: ${verifiedDetails.status.label} (filter: ${verifiedDetails.filter}, reason: ${verifiedDetails.reason ?: "cmdline"})"
+                    } else {
+                        "[WARNING] ART Status: ${verifiedDetails.filter.uppercase()} - AOT machine code was not generated."
                     }
-                    state.copy(
-                        allApps = updated,
-                        filteredApps = applyFilters(updated, state.searchQuery, state.activeCategory, state.activeStatusFilter)
-                    )
+                    _uiState.update { state ->
+                        val updated = state.allApps.map {
+                            if (it.packageName == app.packageName) {
+                                it.copy(
+                                    compileStatus = verifiedDetails.status,
+                                    compilationFilter = verifiedDetails.filter,
+                                    compilationReason = verifiedDetails.reason,
+                                    primaryAbi = verifiedDetails.primaryAbi
+                                )
+                            } else it
+                        }
+                        state.copy(
+                            allApps = updated,
+                            filteredApps = applyFilters(updated, state.searchQuery, state.activeCategory, state.activeStatusFilter),
+                            consoleLogs = state.consoleLogs + verifyLog
+                        )
+                    }
                 }
             }
 
@@ -411,9 +443,78 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update {
                     it.copy(
                         isCompiling = false,
-                        consoleLogs = it.consoleLogs + "[COMPLETE] All ${selected.size} apps optimized successfully."
+                        consoleLogs = it.consoleLogs + "[COMPLETE] All ${selected.size} apps processed."
                     )
                 }
+            }
+        }
+    }
+
+    fun inspectApp(app: AppInfo) {
+        _uiState.update {
+            it.copy(
+                inspectingApp = app,
+                inspectingDetails = null,
+                isInspectingLoading = true
+            )
+        }
+        viewModelScope.launch {
+            val details = shizukuController.getAppDexoptDetails(app.packageName)
+            _uiState.update { state ->
+                val updated = state.allApps.map {
+                    if (it.packageName == app.packageName) {
+                        it.copy(
+                            compileStatus = details.status,
+                            compilationFilter = details.filter,
+                            compilationReason = details.reason,
+                            primaryAbi = details.primaryAbi
+                        )
+                    } else it
+                }
+                state.copy(
+                    inspectingDetails = details,
+                    isInspectingLoading = false,
+                    allApps = updated,
+                    filteredApps = applyFilters(updated, state.searchQuery, state.activeCategory, state.activeStatusFilter)
+                )
+            }
+        }
+    }
+
+    fun recheckInspectingApp() {
+        val app = _uiState.value.inspectingApp ?: return
+        inspectApp(app)
+    }
+
+    fun closeAppInspector() {
+        _uiState.update { it.copy(inspectingApp = null, inspectingDetails = null, isInspectingLoading = false) }
+    }
+
+    fun optimizeSingleApp(packageName: String, mode: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isInspectingLoading = true) }
+            shizukuController.executeCommand(
+                arrayOf("cmd", "package", "compile", "-m", mode, "-f", packageName)
+            ).collect { _ -> }
+
+            val details = shizukuController.getAppDexoptDetails(packageName)
+            _uiState.update { state ->
+                val updated = state.allApps.map {
+                    if (it.packageName == packageName) {
+                        it.copy(
+                            compileStatus = details.status,
+                            compilationFilter = details.filter,
+                            compilationReason = details.reason,
+                            primaryAbi = details.primaryAbi
+                        )
+                    } else it
+                }
+                state.copy(
+                    inspectingDetails = details,
+                    isInspectingLoading = false,
+                    allApps = updated,
+                    filteredApps = applyFilters(updated, state.searchQuery, state.activeCategory, state.activeStatusFilter)
+                )
             }
         }
     }

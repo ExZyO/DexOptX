@@ -27,9 +27,9 @@ class UpdateManager(private val context: Context) {
     val currentVersion: String
         get() = try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.0.2"
+            pInfo.versionName ?: "1.0.6"
         } catch (_: Exception) {
-            "1.0.2"
+            "1.0.6"
         }
 
     private fun httpGet(urlStr: String, accept: String = "application/json"): String? {
@@ -178,11 +178,12 @@ class UpdateManager(private val context: Context) {
                 val targetTag = latestReleaseTag ?: "v$remoteVersion"
                 val formattedTag = if (targetTag.startsWith("v", ignoreCase = true)) targetTag else "v$targetTag"
 
-                val isApkUploaded = !discoveredApkUrl.isNullOrEmpty() && (discoveredApkUrl!!.contains(remoteVersion) || discoveredApkUrl!!.contains(targetTag))
+                val apkUrl = discoveredApkUrl
+                val isApkUploaded = !apkUrl.isNullOrEmpty() && (apkUrl.contains(remoteVersion) || apkUrl.contains(targetTag))
                 val isBuilding = isNewer && (!isApkUploaded || actionsBuilding)
 
-                val targetApkUrl = if (isApkUploaded) {
-                    discoveredApkUrl!!
+                val targetApkUrl = if (isApkUploaded && apkUrl != null) {
+                    apkUrl
                 } else {
                     "https://github.com/ExZyO/DexOptX/releases/download/$formattedTag/DexOptX-$formattedTag-release.apk"
                 }

@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Android
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -61,6 +62,7 @@ import com.antigravity.dexoptx.theme.TvFocusHighlight
 fun AppCard(
     app: AppInfo,
     onToggleSelect: () -> Unit,
+    onInspectApp: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -143,6 +145,27 @@ fun AppCard(
                     lineHeight = 14.sp,
                     maxLines = 1
                 )
+                if (app.compilationFilter != null && app.compilationFilter.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = buildString {
+                            append(app.compilationFilter.uppercase())
+                            app.compilationReason?.let { append(" · $it") }
+                            app.primaryAbi?.let { append(" · $it") }
+                        },
+                        color = when (app.compileStatus) {
+                            CompileStatus.SPEED -> ElectricIndigo.copy(alpha = 0.9f)
+                            CompileStatus.SPEED_PROFILE -> NeonEmerald.copy(alpha = 0.9f)
+                            CompileStatus.EVERYTHING -> Color(0xFFA5B4FC)
+                            CompileStatus.UNCOMPILED -> CyberAmber.copy(alpha = 0.9f)
+                            else -> TextMuted
+                        },
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -152,7 +175,11 @@ fun AppCard(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.Center
             ) {
-                StatusBadge(status = app.compileStatus)
+                StatusBadge(
+                    status = app.compileStatus,
+                    filter = app.compilationFilter,
+                    onClick = onInspectApp
+                )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -209,7 +236,11 @@ fun AppCard(
 }
 
 @Composable
-fun StatusBadge(status: CompileStatus) {
+fun StatusBadge(
+    status: CompileStatus,
+    filter: String? = null,
+    onClick: (() -> Unit)? = null
+) {
     val (label, bg, border, textColor) = when (status) {
         CompileStatus.SPEED -> Quad(
             "COMPILED: SPEED",
@@ -230,13 +261,13 @@ fun StatusBadge(status: CompileStatus) {
             ElectricIndigo
         )
         CompileStatus.UNCOMPILED -> Quad(
-            "UNCOMPILED",
+            if (filter != null && filter.isNotBlank()) "UNCOMPILED: ${filter.uppercase()}" else "UNCOMPILED",
             CyberAmber.copy(alpha = 0.15f),
             CyberAmber.copy(alpha = 0.4f),
             CyberAmber
         )
         CompileStatus.UNKNOWN -> Quad(
-            "READY",
+            "STATUS: READY",
             Color(0x18FFFFFF),
             Color(0x33FFFFFF),
             Color(0xFFCBD5E1)
@@ -248,16 +279,32 @@ fun StatusBadge(status: CompileStatus) {
             .clip(RoundedCornerShape(6.dp))
             .background(bg)
             .border(1.dp, border, RoundedCornerShape(6.dp))
+            .then(
+                if (onClick != null) Modifier.clickable { onClick() } else Modifier
+            )
             .padding(horizontal = 7.dp, vertical = 3.dp)
     ) {
-        Text(
-            text = label,
-            color = textColor,
-            fontSize = 9.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.5.sp
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = label,
+                color = textColor,
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+            if (onClick != null) {
+                Icon(
+                    imageVector = Icons.Rounded.Info,
+                    contentDescription = "Inspect ART Details",
+                    tint = textColor.copy(alpha = 0.7f),
+                    modifier = Modifier.size(11.dp)
+                )
+            }
+        }
     }
 }
 

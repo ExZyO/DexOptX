@@ -1,0 +1,83 @@
+name: Build and Release APK
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release ARM64 APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Restore Release Keystore
+        run: |
+          if [ ! -f "app/release.keystore" ]; then
+            echo "Restoring release keystore from embedded signature..."
+            echo "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" | base64 -d > app/release.keystore
+          fi
+
+      - name: Make Gradlew Executable
+        run: chmod +x ./gradlew
+
+      - name: Build Optimized Release APK (assembleRelease)
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Prepare Release Artifacts
+        run: |
+          VERSION=$(grep -o '"version": *"[^"]*"' version.json | cut -d'"' -f4)
+          echo "Packaging DexOptX v${VERSION}..."
+          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/DexOptX-v${VERSION}-release.apk
+          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/DexOptX-release.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DexOptX-Release-APK
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.0.6' }}
+          name: DexOptX ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.0.6' }}
+          files: |
+            app/build/outputs/apk/release/DexOptX-*-release.apk
+            app/build/outputs/apk/release/DexOptX-release.apk
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ### DexOptX v1.0.6 Release (ARM64-v8a Optimized)
+
+            #### What's New:
+            * **Definitive ART Compilation Detection:** Swapped brittle streaming parser with robust `base.apk` & primary-ABI targeting (`arm64-v8a`), eliminating false `verify` statuses from split APKs.
+            * **Forced Compilation Execution (`-f`):** Fixed silent compile skips by always passing `-f` to `cmd package compile`.
+            * **Post-Compile Live Verification:** DexOptX directly verifies and logs ART compiler filters (`speed`, `speed-profile`, `verify`) after every compilation run.
+            * **Interactive Liquid Glass ART Inspector:** Tap any status badge on Phone or TV to view the live compiler filter, compilation reason, primary ABI, `.odex` artifact path, on-demand re-check, and single-app compilation.
+            * **Automated Package Lifecycle Detection:** Integrated a dynamic `BroadcastReceiver` (`ACTION_PACKAGE_ADDED`, `ACTION_PACKAGE_REPLACED`, `ACTION_PACKAGE_REMOVED`) and an `ON_RESUME` lifecycle observer to automatically re-scan apps whenever an app is updated, installed, or uninstalled.
+            * **Dedicated Header Refresh Button:** Added a clean manual refresh button in the header for 1-tap re-scans.
+            * **Full ARM64-v8a Optimization:** Built with R8 code shrinking, resource shrinking, and pure 64-bit ARM architecture for maximum fluidity and zero lag.

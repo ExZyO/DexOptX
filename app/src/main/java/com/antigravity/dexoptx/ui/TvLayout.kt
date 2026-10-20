@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.HelpOutline
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -138,6 +139,8 @@ fun TvLayout(
     onDismissUpdate: () -> Unit = {},
     onOpenConsole: () -> Unit = {},
     onCancelOptimization: () -> Unit = {},
+    onInspectApp: (com.antigravity.dexoptx.model.AppInfo) -> Unit = {},
+    onRefreshAll: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val selectedCount = uiState.filteredApps.count { it.isSelected }
@@ -217,6 +220,34 @@ fun TvLayout(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (uiState.isCheckingUpdate) "CHECKING FOR UPDATES..." else "CHECK FOR UPDATES",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Refresh Apps and ART Status Button
+                TvInteractiveBox(
+                    onClick = onRefreshAll,
+                    modifier = Modifier.fillMaxWidth()
+                ) { isFocused ->
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = null,
+                            tint = if (isFocused) TvCyanFocusBorder else TextPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "REFRESH APPS & ART STATE",
                             color = Color.White,
                             fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace,
@@ -589,6 +620,7 @@ fun TvLayout(
                             AppCard(
                                 app = app,
                                 onToggleSelect = { onToggleApp(app.packageName) },
+                                onInspectApp = { onInspectApp(app) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }

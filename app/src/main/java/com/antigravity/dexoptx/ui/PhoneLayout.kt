@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -68,6 +69,8 @@ fun PhoneLayout(
     onDismissUpdate: () -> Unit,
     onOpenConsole: () -> Unit,
     onCancelOptimization: () -> Unit,
+    onInspectApp: (com.antigravity.dexoptx.model.AppInfo) -> Unit = {},
+    onRefreshAll: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val now = System.currentTimeMillis()
@@ -118,6 +121,24 @@ fun PhoneLayout(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Manual Re-scan Button
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0x18FFFFFF))
+                            .border(1.dp, GlassBorder, RoundedCornerShape(10.dp))
+                            .clickable { onRefreshAll() }
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = "Refresh Apps and Compilation Status",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+
                     // Check for Updates Button
                     Box(
                         modifier = Modifier
@@ -338,6 +359,7 @@ fun PhoneLayout(
                         AppCard(
                             app = app,
                             onToggleSelect = { onToggleApp(app.packageName) },
+                            onInspectApp = { onInspectApp(app) },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
