@@ -193,6 +193,8 @@ fun PhoneLayout(
                     update = uiState.availableUpdate,
                     onDownloadClick = onDownloadUpdate,
                     onDismissClick = onDismissUpdate,
+                    isDownloading = uiState.isDownloadingUpdate,
+                    downloadProgress = uiState.updateDownloadProgress,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
                 )
             } else if (uiState.updateStatusMessage != null) {

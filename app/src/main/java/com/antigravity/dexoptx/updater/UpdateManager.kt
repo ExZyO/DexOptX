@@ -3,11 +3,15 @@ package com.antigravity.dexoptx.updater
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.FileProvider
+import com.antigravity.dexoptx.shizuku.ShizukuController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -27,9 +31,9 @@ class UpdateManager(private val context: Context) {
     val currentVersion: String
         get() = try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.0.6"
+            pInfo.versionName ?: "1.0.7"
         } catch (_: Exception) {
-            "1.0.6"
+            "1.0.7"
         }
 
     private fun httpGet(urlStr: String, accept: String = "application/json"): String? {
@@ -203,6 +207,106 @@ class UpdateManager(private val context: Context) {
             } catch (e: Exception) {
                 Result.failure(e)
             }
+        }
+    }
+
+    suspend fun downloadApkDirectly(
+        urlStr: String,
+        onProgress: (bytesRead: Long, totalBytes: Long) -> Unit
+    ): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            var currentUrl = urlStr
+            var conn: HttpURLConnection? = null
+            var redirects = 0
+            while (redirects < 5) {
+                val url = URL(currentUrl)
+                conn = (url.openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = true
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                    setRequestProperty("User-Agent", "DexOptX-Updater")
+                }
+                val status = conn.responseCode
+                if (status == HttpURLConnection.HTTP_MOVED_TEMP || status == HttpURLConnection.HTTP_MOVED_PERM || status == 307 || status == 308) {
+                    val location = conn.getHeaderField("Location")
+                    conn.disconnect()
+                    if (!location.isNullOrEmpty()) {
+                        currentUrl = location
+                        redirects++
+                        continue
+                    }
+                }
+                break
+            }
+
+            val actualConn = conn ?: throw IllegalStateException("Could not open connection to $urlStr")
+            val totalBytes = actualConn.contentLengthLong
+            val updateDir = File(context.cacheDir, "apk_updates").apply { if (!exists()) mkdirs() }
+            val apkFile = File(updateDir, "DexOptX-latest.apk")
+            if (apkFile.exists()) apkFile.delete()
+
+            actualConn.inputStream.use { input ->
+                FileOutputStream(apkFile).use { output ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalRead = 0L
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        totalRead += bytesRead
+                        onProgress(totalRead, totalBytes)
+                    }
+                    output.flush()
+                }
+            }
+            actualConn.disconnect()
+            apkFile.setReadable(true, false)
+            Result.success(apkFile)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun installApk(
+        apkFile: File,
+        shizukuController: ShizukuController
+    ): Result<String> = withContext(Dispatchers.IO) {
+        // Method A: If Shizuku or Root is connected, perform seamless installation via shell
+        if (shizukuController.isExecutionReady()) {
+            try {
+                val tmpPath = "/data/local/tmp/DexOptX-update.apk"
+                // Copy to public /data/local/tmp/ so Shizuku shell has full read permissions
+                shizukuController.executeCommand(arrayOf("cp", apkFile.absolutePath, tmpPath)).collect { _ -> }
+
+                var installOutput = ""
+                shizukuController.executeCommand(
+                    arrayOf("cmd", "package", "install", "-r", tmpPath)
+                ).collect { line ->
+                    installOutput += "$line\n"
+                }
+
+                if (installOutput.contains("Success", ignoreCase = true)) {
+                    return@withContext Result.success("Installed successfully via Shizuku")
+                }
+            } catch (_: Throwable) {}
+        }
+
+        // Method B: Native Android PackageInstaller prompt (In-place modal, no browser)
+        try {
+            val apkUri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                apkFile
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            Result.success("Launched system package installer")
+        } catch (e: Exception) {
+            openDownloadUrl(apkFile.absolutePath)
+            Result.failure(e)
         }
     }
 

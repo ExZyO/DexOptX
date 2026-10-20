@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.antigravity.dexoptx.theme.CyberAmber
 import com.antigravity.dexoptx.theme.ElectricIndigo
 import com.antigravity.dexoptx.theme.ElectricViolet
+import com.antigravity.dexoptx.theme.NeonEmerald
 import com.antigravity.dexoptx.theme.TextMuted
 import com.antigravity.dexoptx.theme.TextPrimary
 import com.antigravity.dexoptx.updater.UpdateInfo
@@ -43,6 +45,8 @@ fun UpdateBanner(
     update: UpdateInfo,
     onDownloadClick: () -> Unit,
     onDismissClick: () -> Unit,
+    isDownloading: Boolean = false,
+    downloadProgress: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     val borderColor = if (update.isBuilding) CyberAmber.copy(alpha = 0.6f) else ElectricViolet.copy(alpha = 0.5f)
@@ -68,55 +72,72 @@ fun UpdateBanner(
                 Icon(
                     imageVector = Icons.Rounded.SystemUpdate,
                     contentDescription = null,
-                    tint = if (update.isBuilding) CyberAmber else ElectricViolet,
+                    tint = if (update.isBuilding) CyberAmber else (if (isDownloading) NeonEmerald else ElectricViolet),
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
-                        text = if (update.isBuilding) "COMPILING ON GITHUB: ${update.latestVersion}" else "UPDATE READY: ${update.latestVersion}",
+                        text = if (update.isBuilding) "COMPILING ON GITHUB: ${update.latestVersion}" 
+                            else if (isDownloading) "DOWNLOADING: ${(downloadProgress * 100).toInt()}%" 
+                            else "UPDATE READY: ${update.latestVersion}",
                         color = TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (update.isBuilding) "GitHub Actions is building the new release APK (~2 mins)..." else "Tap to install the latest ARM64-v8a features and fixes.",
-                        color = TextMuted,
-                        fontSize = 11.sp
-                    )
+                    if (isDownloading) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LinearProgressIndicator(
+                            progress = { downloadProgress },
+                            color = NeonEmerald,
+                            trackColor = Color(0x3310B981),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                        )
+                    } else {
+                        Text(
+                            text = if (update.isBuilding) "GitHub Actions is building the new release APK (~2 mins)..." else "Tap to install the latest ARM64-v8a features and fixes.",
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.width(10.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Button(
-                    onClick = onDownloadClick,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (update.isBuilding) CyberAmber else ElectricIndigo
-                    ),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Download,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = if (update.isBuilding) "STATUS" else "DOWNLOAD",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
+                if (!isDownloading) {
+                    Button(
+                        onClick = onDownloadClick,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (update.isBuilding) CyberAmber else ElectricIndigo
+                        ),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Download,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (update.isBuilding) "STATUS" else "INSTALL",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
 
-                Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
 
                 Box(
                     modifier = Modifier

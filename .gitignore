@@ -11,3 +11,4 @@
 *.aab
 *.jks
 *.keystore
+.kotlin/

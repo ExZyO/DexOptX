@@ -3,6 +3,8 @@ package com.antigravity.dexoptx.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +16,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Info
@@ -43,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.antigravity.dexoptx.model.AppInfo
 import com.antigravity.dexoptx.model.CompileStatus
 import com.antigravity.dexoptx.shizuku.DexoptDetails
@@ -68,10 +73,14 @@ fun AppDexoptInspectorDialog(
 ) {
     var showRawDump by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxWidth(0.92f)
+                .widthIn(max = 560.dp)
                 .clip(RoundedCornerShape(24.dp))
                 .background(DarkMidnight.copy(alpha = 0.96f))
                 .border(1.5.dp, GlassBorder, RoundedCornerShape(24.dp))
@@ -269,80 +278,46 @@ fun AppDexoptInspectorDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Actions: Recheck and Single App Compile
-                Row(
+                // Actions: Recheck and Single App Compile (Zero Truncation, TV D-Pad Focusable)
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
+                    InspectorActionButton(
+                        text = "LIVE RE-CHECK ART SUBSYSTEM",
+                        icon = Icons.Rounded.Refresh,
                         onClick = onRecheck,
                         enabled = !isLoading,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0x22FFFFFF),
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(42.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "RE-CHECK",
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                        containerColor = Color(0x22FFFFFF),
+                        contentColor = Color.White,
+                        borderColor = Color(0x44FFFFFF),
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-                    Button(
-                        onClick = onCompileProfile,
-                        enabled = !isLoading,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = NeonEmerald.copy(alpha = 0.2f),
-                            contentColor = NeonEmerald
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(42.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            text = "PROFILE",
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
+                        InspectorActionButton(
+                            text = "COMPILE: PROFILE",
+                            icon = Icons.Rounded.Bolt,
+                            onClick = onCompileProfile,
+                            enabled = !isLoading,
+                            containerColor = NeonEmerald.copy(alpha = 0.15f),
+                            contentColor = NeonEmerald,
+                            borderColor = NeonEmerald.copy(alpha = 0.4f),
+                            modifier = Modifier.weight(1f)
                         )
-                    }
 
-                    Button(
-                        onClick = onCompileSpeed,
-                        enabled = !isLoading,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = ElectricIndigo.copy(alpha = 0.3f),
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(42.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Speed,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "SPEED",
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
+                        InspectorActionButton(
+                            text = "COMPILE: SPEED",
+                            icon = Icons.Rounded.Speed,
+                            onClick = onCompileSpeed,
+                            enabled = !isLoading,
+                            containerColor = ElectricIndigo.copy(alpha = 0.25f),
+                            contentColor = Color.White,
+                            borderColor = ElectricIndigo.copy(alpha = 0.5f),
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
@@ -444,6 +419,64 @@ private fun AttributeCard(
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2
+            )
+        }
+    }
+}
+
+@Composable
+private fun InspectorActionButton(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector?,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    containerColor: Color,
+    contentColor: Color,
+    borderColor: Color = GlassBorder,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val border = if (isFocused) Color(0xFF38BDF8) else borderColor
+    val bg = if (isFocused) Color(0x4038BDF8) else containerColor
+    val borderWidth = if (isFocused) 2.5.dp else 1.dp
+
+    Box(
+        modifier = modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .border(borderWidth, border, RoundedCornerShape(12.dp))
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() }
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isFocused) Color.White else contentColor,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
+            Text(
+                text = text,
+                color = if (isFocused) Color.White else contentColor,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp,
+                maxLines = 1
             )
         }
     }

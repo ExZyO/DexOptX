@@ -53,6 +53,8 @@ data class MainUiState(
     val showConsoleDialog: Boolean = false,
     val availableUpdate: com.antigravity.dexoptx.updater.UpdateInfo? = null,
     val isCheckingUpdate: Boolean = false,
+    val isDownloadingUpdate: Boolean = false,
+    val updateDownloadProgress: Float = 0f,
     val updateStatusMessage: String? = null,
     val inspectingApp: AppInfo? = null,
     val inspectingDetails: com.antigravity.dexoptx.shizuku.DexoptDetails? = null,
@@ -184,8 +186,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun performDownloadUpdate() {
-        _uiState.value.availableUpdate?.let {
-            updateManager.openDownloadUrl(it.apkUrl)
+        val update = _uiState.value.availableUpdate ?: return
+        if (update.isBuilding) {
+            updateManager.openDownloadUrl(update.actionsUrl)
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isDownloadingUpdate = true,
+                    updateDownloadProgress = 0.05f,
+                    updateStatusMessage = "Connecting to download ${update.latestVersion}..."
+                )
+            }
+
+            val downloadResult = updateManager.downloadApkDirectly(update.apkUrl) { bytesRead, totalBytes ->
+                if (totalBytes > 0) {
+                    val progress = (bytesRead.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                    val percent = (progress * 100).toInt()
+                    val mbRead = String.format(java.util.Locale.US, "%.1f", bytesRead / (1024f * 1024f))
+                    val mbTotal = String.format(java.util.Locale.US, "%.1f", totalBytes / (1024f * 1024f))
+                    _uiState.update {
+                        it.copy(
+                            updateDownloadProgress = progress,
+                            updateStatusMessage = "Downloading: $percent% ($mbRead MB / $mbTotal MB)"
+                        )
+                    }
+                }
+            }
+
+            downloadResult.onSuccess { apkFile ->
+                _uiState.update {
+                    it.copy(
+                        isDownloadingUpdate = false,
+                        updateDownloadProgress = 1f,
+                        updateStatusMessage = "Installing ${update.latestVersion}..."
+                    )
+                }
+                updateManager.installApk(apkFile, shizukuController)
+            }.onFailure { err ->
+                _uiState.update {
+                    it.copy(
+                        isDownloadingUpdate = false,
+                        updateStatusMessage = "Direct download failed: ${err.localizedMessage}. Opening browser..."
+                    )
+                }
+                updateManager.openDownloadUrl(update.apkUrl)
+            }
         }
     }
 

@@ -594,6 +594,8 @@ fun TvLayout(
                         update = uiState.availableUpdate,
                         onDownloadClick = onDownloadUpdate,
                         onDismissClick = onDismissUpdate,
+                        isDownloading = uiState.isDownloadingUpdate,
+                        downloadProgress = uiState.updateDownloadProgress,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 10.dp)
