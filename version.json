@@ -1,9 +1,10 @@
 {
-  "version": "1.0.7",
-  "versionCode": 8,
-  "apkUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.7/DexOptX-v1.0.7-release.apk",
-  "downloadUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.7/DexOptX-v1.0.7-release.apk",
-  "releasePage": "https://github.com/ExZyO/DexOptX/releases/tag/v1.0.7",
-  "releaseDate": "2026-10-20",
-  "releaseNotes": "v1.0.7: Added direct in-app APK downloading with live progress tracking and automatic package installation (via Shizuku or system package installer) without leaving the app. Fixed ART Inspector dialog layout squishing and button text truncation on both mobile and Android TV (Nvidia Shield) with full D-pad remote focus navigation."
+  "version": "1.0.8",
+  "versionCode": 9,
+  "apkUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.8/DexOptX-v1.0.8-arm64-v8a-release.apk",
+  "apkUrlV7a": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.8/DexOptX-v1.0.8-armeabi-v7a-release.apk",
+  "downloadUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.8/DexOptX-v1.0.8-arm64-v8a-release.apk",
+  "releasePage": "https://github.com/ExZyO/DexOptX/releases/tag/v1.0.8",
+  "releaseDate": "2026-10-22",
+  "releaseNotes": "v1.0.8: Added ARMv7 (armeabi-v7a) APK for older 32-bit ARM devices alongside the existing ARM64 (arm64-v8a) build. The in-app updater now automatically picks the correct APK for your device architecture."
 }

@@ -3,6 +3,7 @@ package com.antigravity.dexoptx.updater
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.core.content.FileProvider
 import com.antigravity.dexoptx.shizuku.ShizukuController
 import kotlinx.coroutines.Dispatchers
@@ -31,9 +32,9 @@ class UpdateManager(private val context: Context) {
     val currentVersion: String
         get() = try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.0.7"
+            pInfo.versionName ?: "1.0.8"
         } catch (_: Exception) {
-            "1.0.7"
+            "1.0.8"
         }
 
     private fun httpGet(urlStr: String, accept: String = "application/json"): String? {
@@ -91,14 +92,20 @@ class UpdateManager(private val context: Context) {
 
                             val assets = json.optJSONArray("assets")
                             if (assets != null) {
+                                val deviceAbi = deviceAbiTag()
+                                var archMatch: String? = null
+                                var anyApk: String? = null
                                 for (i in 0 until assets.length()) {
                                     val asset = assets.getJSONObject(i)
                                     val aName = asset.optString("name", "")
                                     if (aName.endsWith(".apk", ignoreCase = true)) {
-                                        discoveredApkUrl = asset.optString("browser_download_url", "")
-                                        break
+                                        if (anyApk == null) anyApk = asset.optString("browser_download_url", "")
+                                        if (aName.contains(deviceAbi, ignoreCase = true)) {
+                                            archMatch = asset.optString("browser_download_url", "")
+                                        }
                                     }
                                 }
+                                discoveredApkUrl = archMatch ?: anyApk
                             }
                         } catch (_: Exception) {}
                     }
@@ -111,7 +118,7 @@ class UpdateManager(private val context: Context) {
                         try {
                             val json = JSONObject(raw)
                             val ver = json.optString("version", "").removePrefix("v").trim()
-                            val apk = json.optString("apkUrl", json.optString("downloadUrl", ""))
+                            val apk = pickApkUrlForDevice(json)
                             val verClean = parseVersionString(ver)
                             if (verClean != null) candidateVersions.add(verClean)
                             if (apk.isNotEmpty() && discoveredApkUrl.isNullOrEmpty()) {
@@ -128,7 +135,7 @@ class UpdateManager(private val context: Context) {
                         try {
                             val json = JSONObject(raw)
                             val ver = json.optString("version", "").removePrefix("v").trim()
-                            val apk = json.optString("apkUrl", json.optString("downloadUrl", ""))
+                            val apk = pickApkUrlForDevice(json)
                             val verClean = parseVersionString(ver)
                             if (verClean != null) candidateVersions.add(verClean)
                             if (apk.isNotEmpty() && discoveredApkUrl.isNullOrEmpty()) {
@@ -189,7 +196,7 @@ class UpdateManager(private val context: Context) {
                 val targetApkUrl = if (isApkUploaded && apkUrl != null) {
                     apkUrl
                 } else {
-                    "https://github.com/ExZyO/DexOptX/releases/download/$formattedTag/DexOptX-$formattedTag-release.apk"
+                    "https://github.com/ExZyO/DexOptX/releases/download/$formattedTag/DexOptX-$formattedTag-${deviceAbiTag()}-release.apk"
                 }
 
                 Result.success(
@@ -317,6 +324,26 @@ class UpdateManager(private val context: Context) {
             }
             context.startActivity(intent)
         } catch (_: Throwable) {}
+    }
+
+    private fun deviceAbiTag(): String {
+        val primary = Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
+        return when {
+            primary.contains("arm64") -> "arm64-v8a"
+            primary.contains("armeabi") -> "armeabi-v7a"
+            else -> primary
+        }
+    }
+
+    private fun pickApkUrlForDevice(json: JSONObject): String {
+        val primary = Build.SUPPORTED_ABIS.firstOrNull() ?: ""
+        // If device is 32-bit ARM and a v7a URL is available, prefer that
+        if (primary.contains("armeabi") || !primary.contains("arm64")) {
+            val v7aUrl = json.optString("apkUrlV7a", "")
+            if (v7aUrl.isNotEmpty()) return v7aUrl
+        }
+        // Otherwise use the default (arm64) URL
+        return json.optString("apkUrl", json.optString("downloadUrl", ""))
     }
 
     private fun parseVersionString(input: String): String? {

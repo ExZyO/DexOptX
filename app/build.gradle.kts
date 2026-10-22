@@ -11,11 +11,16 @@ android {
         applicationId = "com.antigravity.dexoptx"
         minSdk = 24
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.0.7"
+        versionCode = 9
+        versionName = "1.0.8"
+    }
 
-        ndk {
-            abiFilters += listOf("arm64-v8a")
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
         }
     }
 

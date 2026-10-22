@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build-and-release:
-    name: Build & Release ARM64 APK
+    name: Build & Release ARM64 + ARMv7 APKs
     runs-on: ubuntu-latest
 
     steps:
@@ -41,43 +41,65 @@ jobs:
       - name: Make Gradlew Executable
         run: chmod +x ./gradlew
 
-      - name: Build Optimized Release APK (assembleRelease)
+      - name: Build Optimized Release APKs (assembleRelease)
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Prepare Release Artifacts
         run: |
           VERSION=$(grep -o '"version": *"[^"]*"' version.json | cut -d'"' -f4)
-          echo "Packaging DexOptX v${VERSION}..."
-          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/DexOptX-v${VERSION}-release.apk
-          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/DexOptX-release.apk
+          echo "Packaging DexOptX v${VERSION} APKs..."
+          APK_DIR="app/build/outputs/apk/release"
+          # Rename ABI-split APKs to clean names
+          if [ -f "${APK_DIR}/app-arm64-v8a-release.apk" ]; then
+            cp "${APK_DIR}/app-arm64-v8a-release.apk" "${APK_DIR}/DexOptX-v${VERSION}-arm64-v8a-release.apk"
+            cp "${APK_DIR}/app-arm64-v8a-release.apk" "${APK_DIR}/DexOptX-arm64-v8a-release.apk"
+          fi
+          if [ -f "${APK_DIR}/app-armeabi-v7a-release.apk" ]; then
+            cp "${APK_DIR}/app-armeabi-v7a-release.apk" "${APK_DIR}/DexOptX-v${VERSION}-armeabi-v7a-release.apk"
+            cp "${APK_DIR}/app-armeabi-v7a-release.apk" "${APK_DIR}/DexOptX-armeabi-v7a-release.apk"
+          fi
+          echo "Done. Listing artifacts:"
+          ls -lh ${APK_DIR}/DexOptX-*.apk
 
-      - name: Upload APK Artifact
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: DexOptX-Release-APK
-          path: app/build/outputs/apk/release/*.apk
+          name: DexOptX-Release-APKs
+          path: app/build/outputs/apk/release/DexOptX-*.apk
           if-no-files-found: error
+
+      - name: Determine Release Tag
+        id: release_tag
+        run: |
+          VERSION=$(grep -o '"version": *"[^"]*"' version.json | cut -d'"' -f4)
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.0.6' }}
-          name: DexOptX ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.0.6' }}
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: DexOptX ${{ steps.release_tag.outputs.tag }}
           files: |
             app/build/outputs/apk/release/DexOptX-*-release.apk
-            app/build/outputs/apk/release/DexOptX-release.apk
           draft: false
           prerelease: false
           generate_release_notes: true
           body: |
-            ### DexOptX v1.0.6 Release (ARM64-v8a Optimized)
+            ### DexOptX ${{ steps.release_tag.outputs.tag }} Release
+
+            #### Available APKs:
+            * **ARM64 (v8a)** - For modern 64-bit devices (Nvidia Shield, most phones from 2017+)
+            * **ARMv7 (v7a)** - For older 32-bit ARM devices
 
             #### What's New:
-            * **Definitive ART Compilation Detection:** Swapped brittle streaming parser with robust `base.apk` & primary-ABI targeting (`arm64-v8a`), eliminating false `verify` statuses from split APKs.
-            * **Forced Compilation Execution (`-f`):** Fixed silent compile skips by always passing `-f` to `cmd package compile`.
-            * **Post-Compile Live Verification:** DexOptX directly verifies and logs ART compiler filters (`speed`, `speed-profile`, `verify`) after every compilation run.
-            * **Interactive Liquid Glass ART Inspector:** Tap any status badge on Phone or TV to view the live compiler filter, compilation reason, primary ABI, `.odex` artifact path, on-demand re-check, and single-app compilation.
-            * **Automated Package Lifecycle Detection:** Integrated a dynamic `BroadcastReceiver` (`ACTION_PACKAGE_ADDED`, `ACTION_PACKAGE_REPLACED`, `ACTION_PACKAGE_REMOVED`) and an `ON_RESUME` lifecycle observer to automatically re-scan apps whenever an app is updated, installed, or uninstalled.
-            * **Dedicated Header Refresh Button:** Added a clean manual refresh button in the header for 1-tap re-scans.
-            * **Full ARM64-v8a Optimization:** Built with R8 code shrinking, resource shrinking, and pure 64-bit ARM architecture for maximum fluidity and zero lag.
+            * Dual-architecture APK builds (ARM64 + ARMv7)
+            * In-app updater automatically picks the correct APK for your device
+            * Direct in-app APK downloading with live progress and automatic installation
+            * Fixed ART Inspector dialog button truncation on mobile and Android TV
+            * Full D-pad remote focus navigation for Nvidia Shield
+            * R8 code shrinking and resource optimization for minimal APK size
