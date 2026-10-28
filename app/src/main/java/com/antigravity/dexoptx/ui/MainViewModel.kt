@@ -24,6 +24,8 @@ enum class StatusFilter(val label: String) {
     ALL("ALL STATUS"),
     UNCOMPILED("UNCOMPILED"),
     COMPILED("COMPILED"),
+    SPEED("SPEED OPT"),
+    SPEED_PROFILE("PROFILE OPT"),
     RECENTLY_UPDATED("RECENT UPDATES")
 }
 
@@ -587,6 +589,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 StatusFilter.ALL -> true
                 StatusFilter.UNCOMPILED -> !app.compileStatus.isCompiled
                 StatusFilter.COMPILED -> app.compileStatus.isCompiled
+                StatusFilter.SPEED -> app.isSpeedOptimized
+                StatusFilter.SPEED_PROFILE -> app.isProfileOptimized
                 StatusFilter.RECENTLY_UPDATED -> (now - app.lastUpdateTime) < sevenDaysMs
             }
 

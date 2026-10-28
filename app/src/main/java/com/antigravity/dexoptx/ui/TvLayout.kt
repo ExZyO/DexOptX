@@ -154,6 +154,9 @@ fun TvLayout(
         } catch (_: Throwable) {}
     }
 
+    val now = System.currentTimeMillis()
+    val sevenDaysMs = 7L * 24 * 60 * 60 * 1000
+
     val catApps = when (uiState.activeCategory) {
         CategoryFilter.ALL -> uiState.allApps
         CategoryFilter.USER_ONLY -> uiState.allApps.filter { !it.isSystemApp }
@@ -162,6 +165,9 @@ fun TvLayout(
     val totalInCat = catApps.size
     val compiledInCat = catApps.count { it.compileStatus.isCompiled }
     val uncompiledInCat = totalInCat - compiledInCat
+    val speedInCat = catApps.count { it.isSpeedOptimized }
+    val profileInCat = catApps.count { it.isProfileOptimized }
+    val recentInCat = catApps.count { (now - it.lastUpdateTime) < sevenDaysMs }
 
     Row(
         modifier = modifier
@@ -375,6 +381,51 @@ fun TvLayout(
                         Triple("ALL", StatusFilter.ALL, totalInCat),
                         Triple("UNOPT", StatusFilter.UNCOMPILED, uncompiledInCat),
                         Triple("OPT", StatusFilter.COMPILED, compiledInCat)
+                    ).forEach { (lbl, sf, count) ->
+                        val isStatSelected = uiState.activeStatusFilter == sf
+
+                        TvInteractiveBox(
+                            onClick = { onStatusFilterChange(sf) },
+                            modifier = Modifier.weight(1f),
+                            isSelected = isStatSelected,
+                            selectedColor = Color(0xFF334155),
+                            selectedBorderColor = Color(0xFF94A3B8),
+                            shape = RoundedCornerShape(8.dp)
+                        ) { isFocused ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 5.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = lbl,
+                                    color = if (isFocused || isStatSelected) Color.White else TextMuted,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = "($count)",
+                                    color = if (isFocused || isStatSelected) Color.White else TextMuted,
+                                    fontSize = 8.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf(
+                        Triple("SPEED", StatusFilter.SPEED, speedInCat),
+                        Triple("PROFILE", StatusFilter.SPEED_PROFILE, profileInCat),
+                        Triple("RECENT", StatusFilter.RECENTLY_UPDATED, recentInCat)
                     ).forEach { (lbl, sf, count) ->
                         val isStatSelected = uiState.activeStatusFilter == sf
 

@@ -11,6 +11,12 @@ enum class CompileStatus(val label: String) {
 
     val isCompiled: Boolean
         get() = this == SPEED || this == SPEED_PROFILE || this == EVERYTHING
+
+    val isSpeedOptimized: Boolean
+        get() = this == SPEED || this == EVERYTHING
+
+    val isProfileOptimized: Boolean
+        get() = this == SPEED_PROFILE
 }
 
 data class AppInfo(
@@ -24,4 +30,12 @@ data class AppInfo(
     val primaryAbi: String? = null,
     val isSelected: Boolean = false,
     val iconDrawable: Drawable? = null
-)
+) {
+    val isSpeedOptimized: Boolean
+        get() = compileStatus.isSpeedOptimized ||
+                (compilationFilter != null && compilationFilter.lowercase().contains("speed") && !compilationFilter.lowercase().contains("profile"))
+
+    val isProfileOptimized: Boolean
+        get() = compileStatus.isProfileOptimized ||
+                (compilationFilter != null && compilationFilter.lowercase().contains("profile"))
+}

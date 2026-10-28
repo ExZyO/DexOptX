@@ -84,6 +84,8 @@ fun PhoneLayout(
     val totalInCat = catApps.size
     val compiledInCat = catApps.count { it.compileStatus.isCompiled }
     val uncompiledInCat = totalInCat - compiledInCat
+    val speedInCat = catApps.count { it.isSpeedOptimized }
+    val profileInCat = catApps.count { it.isProfileOptimized }
     val recentInCat = catApps.count { (now - it.lastUpdateTime) < sevenDaysMs }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -316,6 +318,8 @@ fun PhoneLayout(
                         StatusFilter.ALL -> totalInCat
                         StatusFilter.UNCOMPILED -> uncompiledInCat
                         StatusFilter.COMPILED -> compiledInCat
+                        StatusFilter.SPEED -> speedInCat
+                        StatusFilter.SPEED_PROFILE -> profileInCat
                         StatusFilter.RECENTLY_UPDATED -> recentInCat
                     }
                     Box(
