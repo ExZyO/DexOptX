@@ -1,7 +1,5 @@
 package com.antigravity.dexoptx.model
 
-import android.graphics.drawable.Drawable
-
 enum class CompileStatus(val label: String) {
     SPEED("COMPILED: SPEED"),
     SPEED_PROFILE("COMPILED: PROFILE"),
@@ -19,6 +17,15 @@ enum class CompileStatus(val label: String) {
         get() = this == SPEED_PROFILE
 }
 
+data class StatusCounts(
+    val total: Int = 0,
+    val uncompiled: Int = 0,
+    val compiled: Int = 0,
+    val speed: Int = 0,
+    val profile: Int = 0,
+    val recent: Int = 0
+)
+
 data class AppInfo(
     val packageName: String,
     val appName: String,
@@ -28,8 +35,7 @@ data class AppInfo(
     val compilationFilter: String? = null,
     val compilationReason: String? = null,
     val primaryAbi: String? = null,
-    val isSelected: Boolean = false,
-    val iconDrawable: Drawable? = null
+    val isSelected: Boolean = false
 ) {
     val isSpeedOptimized: Boolean
         get() = compileStatus.isSpeedOptimized ||

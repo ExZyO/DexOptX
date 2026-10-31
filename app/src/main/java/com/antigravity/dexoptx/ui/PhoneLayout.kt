@@ -29,6 +29,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import com.antigravity.dexoptx.model.StatusCounts
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,20 +75,47 @@ fun PhoneLayout(
     onRefreshAll: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val now = System.currentTimeMillis()
-    val sevenDaysMs = 7L * 24 * 60 * 60 * 1000
-
-    val catApps = when (uiState.activeCategory) {
-        CategoryFilter.ALL -> uiState.allApps
-        CategoryFilter.USER_ONLY -> uiState.allApps.filter { !it.isSystemApp }
-        CategoryFilter.SYSTEM_ONLY -> uiState.allApps.filter { it.isSystemApp }
+    val (userCount, systemCount) = remember(uiState.allApps) {
+        var u = 0
+        var s = 0
+        for (app in uiState.allApps) {
+            if (app.isSystemApp) s++ else u++
+        }
+        Pair(u, s)
     }
-    val totalInCat = catApps.size
-    val compiledInCat = catApps.count { it.compileStatus.isCompiled }
-    val uncompiledInCat = totalInCat - compiledInCat
-    val speedInCat = catApps.count { it.isSpeedOptimized }
-    val profileInCat = catApps.count { it.isProfileOptimized }
-    val recentInCat = catApps.count { (now - it.lastUpdateTime) < sevenDaysMs }
+
+    val statusCounts = remember(
+        uiState.allApps,
+        uiState.activeCategory
+    ) {
+        val now = System.currentTimeMillis()
+        val sevenDaysMs = 7L * 24 * 60 * 60 * 1000
+        val catApps = when (uiState.activeCategory) {
+            CategoryFilter.ALL -> uiState.allApps
+            CategoryFilter.USER_ONLY -> uiState.allApps.filter { !it.isSystemApp }
+            CategoryFilter.SYSTEM_ONLY -> uiState.allApps.filter { it.isSystemApp }
+        }
+        val total = catApps.size
+        var compiled = 0
+        var speed = 0
+        var profile = 0
+        var recent = 0
+        for (app in catApps) {
+            if (app.compileStatus.isCompiled) compiled++
+            if (app.isSpeedOptimized) speed++
+            if (app.isProfileOptimized) profile++
+            if (now - app.lastUpdateTime < sevenDaysMs) recent++
+        }
+        val uncompiled = total - compiled
+        StatusCounts(
+            total = total,
+            uncompiled = uncompiled,
+            compiled = compiled,
+            speed = speed,
+            profile = profile,
+            recent = recent
+        )
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -282,8 +311,8 @@ fun PhoneLayout(
                     val isCatSelected = uiState.activeCategory == cat
                     val catCount = when (cat) {
                         CategoryFilter.ALL -> uiState.allApps.size
-                        CategoryFilter.USER_ONLY -> uiState.allApps.count { !it.isSystemApp }
-                        CategoryFilter.SYSTEM_ONLY -> uiState.allApps.count { it.isSystemApp }
+                        CategoryFilter.USER_ONLY -> userCount
+                        CategoryFilter.SYSTEM_ONLY -> systemCount
                     }
                     Box(
                         modifier = Modifier
@@ -315,12 +344,12 @@ fun PhoneLayout(
                 items(StatusFilter.values()) { status ->
                     val isStatSelected = uiState.activeStatusFilter == status
                     val count = when (status) {
-                        StatusFilter.ALL -> totalInCat
-                        StatusFilter.UNCOMPILED -> uncompiledInCat
-                        StatusFilter.COMPILED -> compiledInCat
-                        StatusFilter.SPEED -> speedInCat
-                        StatusFilter.SPEED_PROFILE -> profileInCat
-                        StatusFilter.RECENTLY_UPDATED -> recentInCat
+                        StatusFilter.ALL -> statusCounts.total
+                        StatusFilter.UNCOMPILED -> statusCounts.uncompiled
+                        StatusFilter.COMPILED -> statusCounts.compiled
+                        StatusFilter.SPEED -> statusCounts.speed
+                        StatusFilter.SPEED_PROFILE -> statusCounts.profile
+                        StatusFilter.RECENTLY_UPDATED -> statusCounts.recent
                     }
                     Box(
                         modifier = Modifier

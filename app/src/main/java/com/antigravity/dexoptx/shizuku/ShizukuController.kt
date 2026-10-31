@@ -30,7 +30,12 @@ class ShizukuController(private val context: Context) {
     private val requestListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
         if (requestCode == REQUEST_CODE_SHIZUKU) {
             val granted = grantResult == PackageManager.PERMISSION_GRANTED
-            permissionListeners.forEach { it(granted) }
+            val listeners = synchronized(permissionListeners) {
+                val copy = permissionListeners.toList()
+                permissionListeners.clear()
+                copy
+            }
+            listeners.forEach { it(granted) }
         }
     }
 
@@ -48,7 +53,13 @@ class ShizukuController(private val context: Context) {
     }
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
-        permissionListeners.forEach { it(isPermissionGranted()) }
+        val granted = isPermissionGranted()
+        val listeners = synchronized(permissionListeners) {
+            val copy = permissionListeners.toList()
+            permissionListeners.clear()
+            copy
+        }
+        listeners.forEach { it(granted) }
     }
 
     init {
@@ -56,6 +67,16 @@ class ShizukuController(private val context: Context) {
             Shizuku.addRequestPermissionResultListener(requestListener)
             Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
         } catch (_: Throwable) {}
+    }
+
+    fun cleanup() {
+        try {
+            Shizuku.removeRequestPermissionResultListener(requestListener)
+            Shizuku.removeBinderReceivedListener(binderReceivedListener)
+        } catch (_: Throwable) {}
+        synchronized(permissionListeners) {
+            permissionListeners.clear()
+        }
     }
 
     fun isShizukuAvailable(): Boolean {
@@ -77,7 +98,6 @@ class ShizukuController(private val context: Context) {
 
     fun requestPermission(onResult: (Boolean) -> Unit) {
         if (!isShizukuAvailable()) {
-            // If Shizuku is not running, launch Shizuku so user can start it
             openShizukuApp()
             onResult(false)
             return
@@ -87,7 +107,9 @@ class ShizukuController(private val context: Context) {
             return
         }
         try {
-            permissionListeners.add(onResult)
+            synchronized(permissionListeners) {
+                permissionListeners.add(onResult)
+            }
             Shizuku.requestPermission(REQUEST_CODE_SHIZUKU)
         } catch (_: Throwable) {
             onResult(false)
@@ -102,8 +124,11 @@ class ShizukuController(private val context: Context) {
         }
     }
 
+    private var cachedRootAvailable: Boolean? = null
+
     fun isRootAvailable(): Boolean {
-        return try {
+        cachedRootAvailable?.let { return it }
+        val available = try {
             val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
             val reader = BufferedReader(InputStreamReader(p.inputStream))
             val line = reader.readLine()
@@ -111,6 +136,8 @@ class ShizukuController(private val context: Context) {
         } catch (_: Throwable) {
             false
         }
+        cachedRootAvailable = available
+        return available
     }
 
     fun isExecutionReady(): Boolean = isPermissionGranted() || isRootAvailable()
@@ -139,8 +166,8 @@ class ShizukuController(private val context: Context) {
 
         try {
             val process = spawnProcess(commandArgs)
-            val reader = BufferedReader(InputStreamReader(process.inputStream))
-            val errorReader = BufferedReader(InputStreamReader(process.errorStream))
+            val reader = BufferedReader(InputStreamReader(process.inputStream), 8192)
+            val errorReader = BufferedReader(InputStreamReader(process.errorStream), 8192)
 
             var line: String?
             while (reader.readLine().also { line = it } != null) {
@@ -177,82 +204,93 @@ class ShizukuController(private val context: Context) {
     }
 
     /**
-     * Parses the raw lines from `dumpsys package dexopt` or `dumpsys package <package>`.
-     * Accurately tracks base.apk to prevent split APKs from overriding the primary compilation filter.
+     * Directly streams and parses `dumpsys package dexopt` with zero intermediate array allocation.
      */
-    fun parseDexoptDump(lines: List<String>): Map<String, DexoptDetails> {
-        val results = mutableMapOf<String, DexoptDetails>()
-        val packageHeaderRegex = Regex("""^\s*\[([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)\]\s*$""")
-        val filterRegex = Regex("""(?:\[status=|status=|compilation_filter=|filter:\s*|status:\s*compiled\s*\()([a-zA-Z0-9_-]+)""")
-        val reasonRegex = Regex("""(?:\[reason=|reason=|compilation reason:\s*)([a-zA-Z0-9_-]+)""")
-        val abiRegex = Regex("""\b(arm64(?:-v8a)?|armeabi(?:-v7a)?|x86_64|x86)\b""")
-        val odexRegex = Regex("""(?:artifact:?\s*|oat file:?\s*)([^\s\]]+)""")
+    suspend fun getDexoptDumpMap(): Map<String, DexoptDetails> = withContext(Dispatchers.IO) {
+        if (!isExecutionReady()) return@withContext emptyMap()
+        try {
+            val process = spawnProcess(arrayOf("dumpsys", "package", "dexopt"))
+            val reader = BufferedReader(InputStreamReader(process.inputStream), 16384)
+            val results = parseDexoptStream(reader)
+            process.waitFor()
+            results
+        } catch (_: Throwable) {
+            emptyMap()
+        }
+    }
 
+    /**
+     * Parses the dexopt dump directly from a buffered stream without allocating thousands of lines in RAM.
+     */
+    fun parseDexoptStream(reader: BufferedReader): Map<String, DexoptDetails> {
+        val results = mutableMapOf<String, DexoptDetails>()
         var currentPkg: String? = null
         var inBaseApk = false
         var filterFoundForBaseApk = false
-        val currentRawLines = mutableListOf<String>()
 
-        fun commitCurrentPkg(filter: String, reason: String?, abi: String?, odex: String?) {
-            val pkg = currentPkg ?: return
-            val status = mapFilterToStatus(filter)
-            results[pkg] = DexoptDetails(
-                packageName = pkg,
-                status = status,
-                filter = filter,
-                reason = reason,
-                primaryAbi = abi,
-                odexPath = odex,
-                rawOutput = currentRawLines.joinToString("\n").trim()
-            )
-        }
+        var line: String?
+        while (reader.readLine().also { line = it } != null) {
+            val currentLine = line ?: continue
+            val trimmed = currentLine.trim()
+            if (trimmed.isEmpty()) continue
 
-        for (line in lines) {
-            val trimmed = line.trim()
-            val headerMatch = packageHeaderRegex.find(trimmed)
-            if (headerMatch != null) {
-                currentPkg = headerMatch.groupValues[1]
-                inBaseApk = false
-                filterFoundForBaseApk = false
-                currentRawLines.clear()
-                currentRawLines.add(line)
-                continue
+            // Fast-path package header: [com.example.app]
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                val candidate = trimmed.substring(1, trimmed.length - 1).trim()
+                if (candidate.contains(".") && !candidate.contains(" ")) {
+                    currentPkg = candidate
+                    inBaseApk = false
+                    filterFoundForBaseApk = false
+                    continue
+                }
             }
 
             if (currentPkg != null) {
-                currentRawLines.add(line)
                 if (trimmed.startsWith("path:")) {
                     inBaseApk = trimmed.contains("base.apk") || (!trimmed.contains("split_") && trimmed.endsWith(".apk"))
                 }
 
-                val filterMatch = filterRegex.find(trimmed)
+                val filterMatch = FILTER_REGEX.find(trimmed)
                 if (filterMatch != null) {
                     val rawFilter = filterMatch.groupValues[1].lowercase()
-                    val reasonMatch = reasonRegex.find(trimmed)
-                    val abiMatch = abiRegex.find(trimmed)
-                    val odexMatch = odexRegex.find(trimmed)
+                    val reason = REASON_REGEX.find(trimmed)?.groupValues?.get(1)
+                    val abi = ABI_REGEX.find(trimmed)?.groupValues?.get(1)
+                    val odex = ODEX_REGEX.find(trimmed)?.groupValues?.get(1)
 
                     if (inBaseApk && !filterFoundForBaseApk) {
-                        commitCurrentPkg(
+                        results[currentPkg] = DexoptDetails(
+                            packageName = currentPkg,
+                            status = mapFilterToStatus(rawFilter),
                             filter = rawFilter,
-                            reason = reasonMatch?.groupValues?.get(1),
-                            abi = abiMatch?.groupValues?.get(1),
-                            odex = odexMatch?.groupValues?.get(1)
+                            reason = reason,
+                            primaryAbi = abi,
+                            odexPath = odex,
+                            rawOutput = ""
                         )
                         filterFoundForBaseApk = true
                     } else if (!filterFoundForBaseApk && !results.containsKey(currentPkg)) {
-                        // Fallback if base.apk wasn't explicitly named
-                        commitCurrentPkg(
+                        results[currentPkg] = DexoptDetails(
+                            packageName = currentPkg,
+                            status = mapFilterToStatus(rawFilter),
                             filter = rawFilter,
-                            reason = reasonMatch?.groupValues?.get(1),
-                            abi = abiMatch?.groupValues?.get(1),
-                            odex = odexMatch?.groupValues?.get(1)
+                            reason = reason,
+                            primaryAbi = abi,
+                            odexPath = odex,
+                            rawOutput = ""
                         )
                     }
                 }
             }
         }
         return results
+    }
+
+    /**
+     * Backward-compatible parseDexoptDump for lines lists.
+     */
+    fun parseDexoptDump(lines: List<String>): Map<String, DexoptDetails> {
+        val reader = BufferedReader(java.io.StringReader(lines.joinToString("\n")), 8192)
+        return parseDexoptStream(reader)
     }
 
     /**
@@ -271,7 +309,7 @@ class ShizukuController(private val context: Context) {
         val outputLines = mutableListOf<String>()
         try {
             val process = spawnProcess(arrayOf("dumpsys", "package", packageName))
-            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val reader = BufferedReader(InputStreamReader(process.inputStream), 8192)
             var line: String?
             var inDexoptState = false
             while (reader.readLine().also { line = it } != null) {
@@ -293,7 +331,7 @@ class ShizukuController(private val context: Context) {
         if (outputLines.isEmpty()) {
             try {
                 val process = spawnProcess(arrayOf("pm", "art", "dump", packageName))
-                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                val reader = BufferedReader(InputStreamReader(process.inputStream), 8192)
                 var line: String?
                 while (reader.readLine().also { line = it } != null) {
                     line?.let { outputLines.add(it) }
@@ -320,15 +358,12 @@ class ShizukuController(private val context: Context) {
         }
 
         val rawText = outputLines.joinToString("\n")
-        val filterRegex = Regex("""(?:\[status=|status=|compilation_filter=|filter:\s*|status:\s*compiled\s*\()([a-zA-Z0-9_-]+)""")
-        val reasonRegex = Regex("""(?:\[reason=|reason=|compilation reason:\s*)([a-zA-Z0-9_-]+)""")
-        val abiRegex = Regex("""\b(arm64(?:-v8a)?|armeabi(?:-v7a)?|x86_64|x86)\b""")
-        val filterMatch = filterRegex.find(rawText)
+        val filterMatch = FILTER_REGEX.find(rawText)
 
         if (filterMatch != null) {
             val filter = filterMatch.groupValues[1]
-            val reason = reasonRegex.find(rawText)?.groupValues?.get(1)
-            val abi = abiRegex.find(rawText)?.groupValues?.get(1)
+            val reason = REASON_REGEX.find(rawText)?.groupValues?.get(1)
+            val abi = ABI_REGEX.find(rawText)?.groupValues?.get(1)
             return@withContext DexoptDetails(
                 packageName = packageName,
                 status = mapFilterToStatus(filter),
@@ -360,5 +395,9 @@ class ShizukuController(private val context: Context) {
 
     companion object {
         const val REQUEST_CODE_SHIZUKU = 9021
+        private val FILTER_REGEX = Regex("""(?:\[status=|status=|compilation_filter=|filter:\s*|status:\s*compiled\s*\()([a-zA-Z0-9_-]+)""")
+        private val REASON_REGEX = Regex("""(?:\[reason=|reason=|compilation reason:\s*)([a-zA-Z0-9_-]+)""")
+        private val ABI_REGEX = Regex("""\b(arm64(?:-v8a)?|armeabi(?:-v7a)?|x86_64|x86)\b""")
+        private val ODEX_REGEX = Regex("""(?:artifact:?\s*|oat file:?\s*)([^\s\]]+)""")
     }
 }

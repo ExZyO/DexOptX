@@ -154,20 +154,47 @@ fun TvLayout(
         } catch (_: Throwable) {}
     }
 
-    val now = System.currentTimeMillis()
-    val sevenDaysMs = 7L * 24 * 60 * 60 * 1000
-
-    val catApps = when (uiState.activeCategory) {
-        CategoryFilter.ALL -> uiState.allApps
-        CategoryFilter.USER_ONLY -> uiState.allApps.filter { !it.isSystemApp }
-        CategoryFilter.SYSTEM_ONLY -> uiState.allApps.filter { it.isSystemApp }
+    val (userCount, systemCount) = remember(uiState.allApps) {
+        var u = 0
+        var s = 0
+        for (app in uiState.allApps) {
+            if (app.isSystemApp) s++ else u++
+        }
+        Pair(u, s)
     }
-    val totalInCat = catApps.size
-    val compiledInCat = catApps.count { it.compileStatus.isCompiled }
-    val uncompiledInCat = totalInCat - compiledInCat
-    val speedInCat = catApps.count { it.isSpeedOptimized }
-    val profileInCat = catApps.count { it.isProfileOptimized }
-    val recentInCat = catApps.count { (now - it.lastUpdateTime) < sevenDaysMs }
+
+    val statusCounts = remember(
+        uiState.allApps,
+        uiState.activeCategory
+    ) {
+        val now = System.currentTimeMillis()
+        val sevenDaysMs = 7L * 24 * 60 * 60 * 1000
+        val catApps = when (uiState.activeCategory) {
+            CategoryFilter.ALL -> uiState.allApps
+            CategoryFilter.USER_ONLY -> uiState.allApps.filter { !it.isSystemApp }
+            CategoryFilter.SYSTEM_ONLY -> uiState.allApps.filter { it.isSystemApp }
+        }
+        val total = catApps.size
+        var compiled = 0
+        var speed = 0
+        var profile = 0
+        var recent = 0
+        for (app in catApps) {
+            if (app.compileStatus.isCompiled) compiled++
+            if (app.isSpeedOptimized) speed++
+            if (app.isProfileOptimized) profile++
+            if (now - app.lastUpdateTime < sevenDaysMs) recent++
+        }
+        val uncompiled = total - compiled
+        com.antigravity.dexoptx.model.StatusCounts(
+            total = total,
+            uncompiled = uncompiled,
+            compiled = compiled,
+            speed = speed,
+            profile = profile,
+            recent = recent
+        )
+    }
 
     Row(
         modifier = modifier
@@ -324,8 +351,8 @@ fun TvLayout(
                         val isCatSelected = uiState.activeCategory == cat
                         val count = when (cat) {
                             CategoryFilter.ALL -> uiState.allApps.size
-                            CategoryFilter.USER_ONLY -> uiState.allApps.count { !it.isSystemApp }
-                            CategoryFilter.SYSTEM_ONLY -> uiState.allApps.count { it.isSystemApp }
+                            CategoryFilter.USER_ONLY -> userCount
+                            CategoryFilter.SYSTEM_ONLY -> systemCount
                         }
 
                         TvInteractiveBox(
@@ -378,9 +405,9 @@ fun TvLayout(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     listOf(
-                        Triple("ALL", StatusFilter.ALL, totalInCat),
-                        Triple("UNOPT", StatusFilter.UNCOMPILED, uncompiledInCat),
-                        Triple("OPT", StatusFilter.COMPILED, compiledInCat)
+                        Triple("ALL", StatusFilter.ALL, statusCounts.total),
+                        Triple("UNOPT", StatusFilter.UNCOMPILED, statusCounts.uncompiled),
+                        Triple("OPT", StatusFilter.COMPILED, statusCounts.compiled)
                     ).forEach { (lbl, sf, count) ->
                         val isStatSelected = uiState.activeStatusFilter == sf
 
@@ -423,9 +450,9 @@ fun TvLayout(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     listOf(
-                        Triple("SPEED", StatusFilter.SPEED, speedInCat),
-                        Triple("PROFILE", StatusFilter.SPEED_PROFILE, profileInCat),
-                        Triple("RECENT", StatusFilter.RECENTLY_UPDATED, recentInCat)
+                        Triple("SPEED", StatusFilter.SPEED, statusCounts.speed),
+                        Triple("PROFILE", StatusFilter.SPEED_PROFILE, statusCounts.profile),
+                        Triple("RECENT", StatusFilter.RECENTLY_UPDATED, statusCounts.recent)
                     ).forEach { (lbl, sf, count) ->
                         val isStatSelected = uiState.activeStatusFilter == sf
 

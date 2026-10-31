@@ -32,7 +32,11 @@ fun MainScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshAll()
+                if (uiState.allApps.isEmpty()) {
+                    viewModel.refreshAll()
+                } else {
+                    viewModel.refreshShizukuStatus()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

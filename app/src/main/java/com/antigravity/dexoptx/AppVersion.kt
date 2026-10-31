@@ -3,7 +3,7 @@ package com.antigravity.dexoptx
 import android.os.Build
 
 object AppVersion {
-    const val VERSION_NAME = "1.0.9"
+    const val VERSION_NAME = "1.0.10"
 
     val ARCH: String
         get() {

@@ -104,7 +104,7 @@ fun AppDexoptInspectorDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         AppIconImage(
-                            drawable = app.iconDrawable,
+                            packageName = app.packageName,
                             modifier = Modifier.size(44.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))

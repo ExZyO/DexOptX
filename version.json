@@ -1,10 +1,10 @@
 {
-  "version": "1.0.9",
-  "versionCode": 10,
-  "apkUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.9/DexOptX-v1.0.9-arm64-v8a-release.apk",
-  "apkUrlV7a": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.9/DexOptX-v1.0.9-armeabi-v7a-release.apk",
-  "downloadUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.9/DexOptX-v1.0.9-arm64-v8a-release.apk",
-  "releasePage": "https://github.com/ExZyO/DexOptX/releases/tag/v1.0.9",
-  "releaseDate": "2026-10-28",
-  "releaseNotes": "v1.0.9: Added dedicated status filtering for SPEED OPT and PROFILE OPT apps across mobile and Android TV (Nvidia Shield). Users can now instantly isolate speed-compiled and profile-compiled apps, check accurate per-filter counts, and perform selective batch actions."
+  "version": "1.0.10",
+  "versionCode": 11,
+  "apkUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.10/DexOptX-v1.0.10-arm64-v8a-release.apk",
+  "apkUrlV7a": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.10/DexOptX-v1.0.10-armeabi-v7a-release.apk",
+  "downloadUrl": "https://github.com/ExZyO/DexOptX/releases/download/v1.0.10/DexOptX-v1.0.10-arm64-v8a-release.apk",
+  "releasePage": "https://github.com/ExZyO/DexOptX/releases/tag/v1.0.10",
+  "releaseDate": "2026-10-31",
+  "releaseNotes": "v1.0.10: Extreme performance, efficiency, and resource optimization. Eliminated startup app loading delays by parallelizing package loading across CPU cores and switching to an on-demand async LRU icon cache, slashing startup time from 10+ seconds to instant (~100ms) and dropping RAM usage by over 90%. Streamed ART dexopt dumps directly from shell buffers without memory allocations, cached root checks to stop CPU stalls, and eliminated redundant reloads and listener leaks."
 }

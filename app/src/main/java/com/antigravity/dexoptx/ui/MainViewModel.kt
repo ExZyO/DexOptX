@@ -109,6 +109,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         try {
             getApplication<Application>().unregisterReceiver(packageReceiver)
         } catch (_: Throwable) {}
+        loadAppsJob?.cancel()
+        refreshStatusJob?.cancel()
+        compilationJob?.cancel()
+        updatePollJob?.cancel()
+        shizukuController.cleanup()
+        com.antigravity.dexoptx.util.AppIconLoader.clear()
     }
 
     private var updatePollJob: kotlinx.coroutines.Job? = null
@@ -239,10 +245,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var loadAppsJob: kotlinx.coroutines.Job? = null
+    private var refreshStatusJob: kotlinx.coroutines.Job? = null
+
     fun refreshShizukuStatus() {
         val isReady = shizukuController.isExecutionReady()
         _uiState.update { it.copy(isShizukuConnected = isReady) }
-        if (isReady) {
+        if (isReady && _uiState.value.allApps.isNotEmpty()) {
             refreshCompilationStatuses()
         }
     }
@@ -250,21 +259,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun requestShizukuPermission() {
         if (shizukuController.isRootAvailable()) {
             _uiState.update { it.copy(isShizukuConnected = true) }
-            refreshCompilationStatuses()
+            if (_uiState.value.allApps.isNotEmpty()) {
+                refreshCompilationStatuses()
+            }
             return
         }
         shizukuController.requestPermission { granted ->
             val isReady = granted || shizukuController.isRootAvailable()
             _uiState.update { it.copy(isShizukuConnected = isReady) }
-            if (isReady) {
+            if (isReady && _uiState.value.allApps.isNotEmpty()) {
                 refreshCompilationStatuses()
             }
         }
     }
 
     fun loadInstalledApps() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+        loadAppsJob?.cancel()
+        loadAppsJob = viewModelScope.launch {
+            if (_uiState.value.allApps.isEmpty()) {
+                _uiState.update { it.copy(isLoading = true) }
+            }
             val apps = repository.loadInstalledApps()
             _uiState.update { state ->
                 state.copy(
@@ -281,14 +295,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshCompilationStatuses() {
         if (!_uiState.value.isShizukuConnected) return
-        viewModelScope.launch {
+        refreshStatusJob?.cancel()
+        refreshStatusJob = viewModelScope.launch {
             try {
-                val rawLines = mutableListOf<String>()
-                shizukuController.executeCommand(arrayOf("dumpsys", "package", "dexopt")).collect { line ->
-                    rawLines.add(line)
-                }
-
-                val detailsMap = shizukuController.parseDexoptDump(rawLines)
+                val detailsMap = shizukuController.getDexoptDumpMap()
                 if (detailsMap.isNotEmpty()) {
                     _uiState.update { state ->
                         val updated = state.allApps.map { app ->
@@ -575,6 +585,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         category: CategoryFilter,
         status: StatusFilter
     ): List<AppInfo> {
+        if (apps.isEmpty()) return emptyList()
+
+        val cleanQuery = query.trim()
+        val hasQuery = cleanQuery.isNotEmpty()
         val now = System.currentTimeMillis()
         val sevenDaysMs = 7L * 24 * 60 * 60 * 1000
 
@@ -584,6 +598,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 CategoryFilter.USER_ONLY -> !app.isSystemApp
                 CategoryFilter.SYSTEM_ONLY -> app.isSystemApp
             }
+            if (!matchesCategory) return@filter false
 
             val matchesStatus = when (status) {
                 StatusFilter.ALL -> true
@@ -593,12 +608,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 StatusFilter.SPEED_PROFILE -> app.isProfileOptimized
                 StatusFilter.RECENTLY_UPDATED -> (now - app.lastUpdateTime) < sevenDaysMs
             }
+            if (!matchesStatus) return@filter false
 
-            val matchesQuery = query.isBlank() ||
-                    app.appName.contains(query, ignoreCase = true) ||
-                    app.packageName.contains(query, ignoreCase = true)
-
-            matchesCategory && matchesStatus && matchesQuery
+            if (hasQuery) {
+                app.appName.contains(cleanQuery, ignoreCase = true) ||
+                app.packageName.contains(cleanQuery, ignoreCase = true)
+            } else {
+                true
+            }
         }
     }
 }

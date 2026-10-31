@@ -28,10 +28,13 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.antigravity.dexoptx.util.AppIconLoader
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -118,7 +121,7 @@ fun AppCard(
         ) {
             // App Icon
             AppIconImage(
-                drawable = app.iconDrawable,
+                packageName = app.packageName,
                 modifier = Modifier.size(46.dp)
             )
 
@@ -311,8 +314,24 @@ fun StatusBadge(
 private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 @Composable
-fun AppIconImage(drawable: Drawable?, modifier: Modifier = Modifier) {
-    if (drawable == null) {
+fun AppIconImage(packageName: String, modifier: Modifier = Modifier) {
+    val cached = remember(packageName) { AppIconLoader.getCached(packageName) }
+    var imageBitmap by remember(packageName) { mutableStateOf(cached) }
+    val context = LocalContext.current
+
+    if (imageBitmap == null) {
+        LaunchedEffect(packageName) {
+            imageBitmap = AppIconLoader.loadIcon(context, packageName)
+        }
+    }
+
+    if (imageBitmap != null) {
+        Image(
+            bitmap = imageBitmap!!,
+            contentDescription = null,
+            modifier = modifier.clip(RoundedCornerShape(12.dp))
+        )
+    } else {
         Box(
             modifier = modifier
                 .clip(RoundedCornerShape(12.dp))
@@ -322,24 +341,9 @@ fun AppIconImage(drawable: Drawable?, modifier: Modifier = Modifier) {
             Icon(
                 imageVector = Icons.Rounded.Android,
                 contentDescription = null,
-                tint = Color.White,
+                tint = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.size(24.dp)
             )
         }
-    } else {
-        val bitmap = remember(drawable) {
-            val width = drawable.intrinsicWidth.coerceAtLeast(1)
-            val height = drawable.intrinsicHeight.coerceAtLeast(1)
-            val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(bmp)
-            drawable.setBounds(0, 0, canvas.width, canvas.height)
-            drawable.draw(canvas)
-            bmp.asImageBitmap()
-        }
-        Image(
-            bitmap = bitmap,
-            contentDescription = null,
-            modifier = modifier.clip(RoundedCornerShape(12.dp))
-        )
     }
 }
