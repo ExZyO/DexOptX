@@ -32,9 +32,9 @@ class UpdateManager(private val context: Context) {
     val currentVersion: String
         get() = try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.0.10"
+            pInfo.versionName ?: "1.0.11"
         } catch (_: Exception) {
-            "1.0.10"
+            "1.0.11"
         }
 
     private fun httpGet(urlStr: String, accept: String = "application/json"): String? {

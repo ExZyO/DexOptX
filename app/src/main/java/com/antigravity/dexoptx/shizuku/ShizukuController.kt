@@ -187,6 +187,53 @@ class ShizukuController(private val context: Context) {
         }
     }.flowOn(Dispatchers.IO)
 
+    // Tracks whether this device supports modern ART Service flags (--full, -p PRIORITY_INTERACTIVE_FAST)
+    private var supportsModernArtFlags: Boolean? = null
+
+    /**
+     * Executes dexopt compilation with modern ART flags (--full and -p PRIORITY_INTERACTIVE_FAST)
+     * on Android 14+ / S24 Ultra / modern One UI, with automatic seamless fallback for legacy Android.
+     */
+    fun compilePackage(packageName: String, mode: String): Flow<String> = flow {
+        if (!isExecutionReady()) {
+            emit("ERROR: Shizuku permission not granted and Root not available.")
+            return@flow
+        }
+
+        if (supportsModernArtFlags == false) {
+            val legacyCmd = arrayOf("cmd", "package", "compile", "-m", mode, "-f", packageName)
+            executeCommand(legacyCmd).collect { emit(it) }
+            return@flow
+        }
+
+        val modernCmd = arrayOf(
+            "cmd", "package", "compile",
+            "-m", mode,
+            "-f",
+            "--full",
+            "-p", "PRIORITY_INTERACTIVE_FAST",
+            packageName
+        )
+
+        var hasUnknownOption = false
+        executeCommand(modernCmd).collect { line ->
+            if (line.contains("Unknown option", ignoreCase = true) || line.contains("Error: Unknown", ignoreCase = true)) {
+                hasUnknownOption = true
+            } else {
+                emit(line)
+            }
+        }
+
+        if (hasUnknownOption) {
+            supportsModernArtFlags = false
+            emit("[COMPATIBILITY] Modern flags not supported by device runtime. Falling back to standard dexopt...")
+            val legacyCmd = arrayOf("cmd", "package", "compile", "-m", mode, "-f", packageName)
+            executeCommand(legacyCmd).collect { emit(it) }
+        } else {
+            supportsModernArtFlags = true
+        }
+    }.flowOn(Dispatchers.IO)
+
     fun mapFilterToStatus(filter: String?): CompileStatus {
         if (filter.isNullOrBlank()) return CompileStatus.UNKNOWN
         val f = filter.lowercase().trim()

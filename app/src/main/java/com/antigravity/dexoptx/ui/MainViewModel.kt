@@ -464,9 +464,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
 
-                shizukuController.executeCommand(
-                    arrayOf("cmd", "package", "compile", "-m", mode, "-f", app.packageName)
-                ).collect { line ->
+                shizukuController.compilePackage(app.packageName, mode).collect { line ->
                     if (!this@launch.isActive) return@collect
                     _uiState.update { it.copy(consoleLogs = it.consoleLogs + line) }
                 }
@@ -553,9 +551,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun optimizeSingleApp(packageName: String, mode: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isInspectingLoading = true) }
-            shizukuController.executeCommand(
-                arrayOf("cmd", "package", "compile", "-m", mode, "-f", packageName)
-            ).collect { _ -> }
+            shizukuController.compilePackage(packageName, mode).collect { _ -> }
 
             val details = shizukuController.getAppDexoptDetails(packageName)
             _uiState.update { state ->
